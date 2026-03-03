@@ -1,4 +1,3 @@
-/// Path: PanicMode/arch.txt
 PanicMode Architecture
 ======================
 
@@ -65,7 +64,7 @@ PanicMode Architecture
 │    - Discord (free)                                             │
 │    - Email (free SMTP)                                          │
 │    - Webhook (generic)                                          │
-│    - Twilio (optional, paid, for calls)                         │
+│    - Twilio SMS + phone calls (optional, paid)                  │
 │  • Spawns sending in timeout-protected task                     │
 │  • Retry logic + escalation                                     │
 │  • Drains queue on shutdown                                     │
@@ -89,6 +88,28 @@ PanicMode Architecture
 └─────────────────────────────────────────────────────────────────┘
 
 ════════════════════════════════════════════════════════════════════
+                    Optional / Auxiliary Tasks
+════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  HTTP API TASK (optional, not supervised)                        │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━                        │
+│  • Started only when http_api.enabled = true                    │
+│  • GET /health → 200 {"status":"ok","uptime_secs":N}           │
+│  • Any other path → 404                                         │
+│  • Bound to 127.0.0.1:8765 by default                          │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  CTL TASK (auxiliary, failure does not stop monitoring)          │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   │
+│  • Unix socket server: /run/panicmode/ctl.sock                  │
+│  • Protocol: newline-delimited JSON                             │
+│  • Commands: list (blocked IPs), unblock <IP>                   │
+│  • Used by panicmode-ctl CLI                                    │
+└─────────────────────────────────────────────────────────────────┘
+
+════════════════════════════════════════════════════════════════════
                     Task Supervision Layer
 ════════════════════════════════════════════════════════════════════
 
@@ -108,7 +129,7 @@ Each task wrapped in supervise_task():
 metrics_tx/rx:  Monitoring → Detector
                 Queue size: 10
                 Policy: DROP old metrics (real-time priority)
-                
+
 alert_tx/rx:    All tasks → Alert Dispatcher
                 Queue size: 100
                 Policy: NEVER DROP (fallback to stderr + blocking send)
@@ -152,45 +173,42 @@ performance:
   check_interval: "5s"        # Monitoring frequency
 
 monitors:
-  - name: "SSH Bruteforce"
+  - name: "SSH Brute Force"
     type: "auth_failures"
     threshold: 5
     window: "60s"
     actions: [block_ip, alert_critical]
-  
+
   - name: "CPU Spike"
     type: "cpu_usage"
     threshold: 90
-    duration: "30s"
     actions: [freeze_top_process, alert_warning]
 
+# actions: section is for user-defined scripts only.
+# Built-in actions (block_ip, freeze_top_process, mass_freeze, snapshot, etc.)
+# are referenced by name directly in monitor rules — no definition needed.
 actions:
-  block_ip:
-    type: "firewall"
-    duration: "1h"
-  
-  freeze_top_process:
-    type: "process"
-    action: "freeze"
+  my_custom_action:
+    type: script
+    action: /opt/panicmode/scripts/my_script.sh
 
 alerts:
   critical:
     - channel: "telegram"
-      chat_id: "..."
-      retries: 3
     - channel: "ntfy"
-      topic: "myserver"
 
 integrations:
   telegram:
     enabled: true
-    bot_token: "user_provided"
-    chat_id: "user_provided"
-  
+    bot_token: "YOUR_BOT_TOKEN"
+    chat_id: "YOUR_CHAT_ID"
+
   ntfy:
     enabled: true
-    server: "ntfy.sh"
-    topic: "user_provided"
+    server: "https://ntfy.sh"
+    topic: "myserver-alerts"
+
+# See examples/config.yaml for the full annotated config reference.
 
 ════════════════════════════════════════════════════════════════════
                     File Structure
@@ -198,38 +216,72 @@ integrations:
 
 panicmode/
 ├── examples/
-│   ├── basic.yaml!
-│   ├── advanced.yaml???
-│   └── minimal.yaml!
+│   ├── basic.yaml           ← Full working example
+│   ├── config.yaml          ← Fully annotated reference config
+│   ├── mass_freeze.yaml     ← Mass freeze config reference
+│   └── minimal.yaml         ← Minimal quick-start config
 ├── src/
-│   ├── main.rs!              ← Main + supervision
-│   ├── config.rs!
+│   ├── main.rs              ← Entry point + supervised task spawning
+│   ├── config.rs            ← YAML config parsing (all structs)
+│   ├── storage.rs           ← SQLite incident log + blocked IP store
+│   ├── bin/
+│   │   └── panicmode-ctl.rs ← CLI tool (list/unblock)
+│   ├── ctl/
+│   │   └── mod.rs           ← Unix socket server for panicmode-ctl
 │   ├── detector/
-│   │   ├── mod.rs!           ← Detector logic
-│   │   ├── critical_breaker.rs!
-│   │   ├── rules.rs         ← Rule evaluation
-│   │   └── anomaly.rs       ← Anomaly detection
+│   │   ├── mod.rs           ← Detector + IncidentHandler
+│   │   ├── circuit_breaker.rs ← Circuit breaker for action executor
+│   │   ├── rules.rs         ← Rule evaluation (threshold checks)
+│   │   └── anomaly.rs       ← Anomaly detection (spike detection)
 │   ├── monitor/
-│   │   ├── mod.rs!           ← MonitorEngine
-│   │   ├── cpu.rs!           ← CPU metrics
-│   │   ├── memory.rs!        ← RAM metrics
-│   │   ├── network.rs!       ← Network metrics
-│   │   └── auth.rs!          ← Auth log parsing
+│   │   ├── mod.rs           ← MonitorEngine (orchestrates collectors)
+│   │   ├── cpu.rs           ← CPU usage + load average
+│   │   ├── memory.rs        ← RAM + swap metrics
+│   │   ├── network.rs       ← Connection count + suspicious IPs
+│   │   ├── auth.rs          ← Auth log parsing (SSH brute-force)
+│   │   ├── disk_io.rs       ← Disk read/write throughput
+│   │   ├── custom_metrics.rs ← Arbitrary script metric collection
+│   │   └── file_watcher.rs  ← File change notifications (notify crate)
 │   ├── action/
-│   │   ├── mod.rs           ← Action executor
-│   │   ├── firewall.rs      ← iptables wrapper
-│   │   └── process.rs       ← Process control
+│   │   ├── mod.rs           ← API + re-exports
+│   │   ├── trait.rs         ← Action trait + ActionType enum
+│   │   ├── registry.rs      ← ActionRegistry
+│   │   ├── executor.rs      ← ActionExecutor (orchestration)
+│   │   ├── builder.rs       ← Composition root
+│   │   ├── result.rs        ← Result types
+│   │   ├── middleware/
+│   │   │   ├── mod.rs
+│   │   │   └── breaker.rs   ← BreakerWrapped<A>
+│   │   └── implementations/
+│   │       ├── mod.rs
+│   │       ├── firewall.rs  ← BlockIp (runs user firewall script)
+│   │       ├── process.rs   ← Freeze/kill process actions
+│   │       ├── snapshot.rs  ← System state snapshot
+│   │       └── script.rs    ← RunScript (user-defined scripts)
 │   └── alert/
 │       ├── mod.rs           ← AlertDispatcher
-│       ├── telegram.rs      ← Telegram integration
-│       ├── ntfy.rs          ← Ntfy integration
+│       ├── telegram.rs      ← Telegram Bot API
+│       ├── ntfy.rs          ← ntfy.sh push notifications
 │       ├── discord.rs       ← Discord webhook
-│       ├── email.rs         ← SMTP email
-│       └── webhook.rs       ← Generic webhook
-├── Cargo.toml!
+│       ├── email.rs         ← SMTP email (lettre)
+│       ├── webhook.rs       ← Generic HTTP POST webhook
+│       └── twilio.rs        ← Twilio SMS + voice calls
+├── Cargo.toml
 ├── install.sh
-├── panicmode.service
+├── panicmode.service        ← systemd service unit
 └── README.md
+
+Runtime paths (after install):
+/etc/panicmode/
+├── config.yaml              ← Main config
+└── mass_freeze.yaml         ← Mass freeze config (optional)
+/var/lib/panicmode/
+├── incidents.db             ← SQLite incident history
+└── incident_state.json      ← Deduplication state (survives restarts)
+/var/log/panicmode/
+└── panicmode.log            ← Daily-rotating log file
+/run/panicmode/
+└── ctl.sock                 ← Unix socket for panicmode-ctl
 
 ════════════════════════════════════════════════════════════════════
                     Key Design Decisions
@@ -259,78 +311,3 @@ panicmode/
 ✅ Graceful shutdown
 ✅ Auto-restart on failure
 ✅ Minimal overhead (<5% CPU, <50MB RAM)
-
-
-
-
-
-panicmode/
-├── examples/
-│   ├── basic.yaml!
-│   └── minimal.yaml!
-├── src/
-│   ├── main.rs
-│   ├── config.rs
-│   ├── detector/
-│   │   ├── mod.rs
-│   │   ├── critical_breaker.rs
-│   │   ├── rules.rs
-│   │   └── anomaly.rs
-│   ├── monitor/
-│   │   ├── mod.rs
-│   │   ├── cpu.rs
-│   │   ├── custom_metrics.rs
-│   │   ├── file_whacher.rs
-│   │   ├── memory.rs
-│   │   ├── network.rs
-│   │   └── auth.rs
-│   ├── action/   
-│   │   ├── mod.rs                     # API + re-exports
-│   │   ├── trait.rs                   # Action trait (domain)
-│   │   ├── registry.rs                # ActionRegistry (application)
-│   │   ├── executor.rs                # ActionExecutor (orchestration)
-│   │   ├── builder.rs                 # Composition root
-│   │   ├── result.rs                  # Result types
-│   │   ├── middleware/
-│   │   │   ├── mod.rs
-│   │   │   └── breaker.rs             # BreakerWrapped<A>
-│   │   └── implementations/
-│   │       ├── mod.rs
-│   │       ├── firewall.rs
-│   │       ├── process.rs
-│   │       ├── snapshot.rs
-│   │       └── script.rs
-├── Cargo.toml
-
-
-src/action/
-├── mod.rs                     # API + re-exports
-├── trait.rs                   # Action trait (domain)
-├── registry.rs                # ActionRegistry (application)
-├── executor.rs                # ActionExecutor (orchestration)
-├── builder.rs                 # Composition root
-├── result.rs                  # Result types
-├── middleware/
-│   ├── mod.rs
-│   └── breaker.rs             # BreakerWrapped<A>
-└── implementations/
-    ├── mod.rs
-    ├── firewall.rs
-    ├── process.rs
-    ├── snapshot.rs
-    └── script.rs
-
-
-    Repository layout:
-panicmode/
-├── exampels/
-│   ├── config.yaml              # Full annotated config example
-│   ├── mass_freeze.yaml         # Mass freeze config example
-│   └── minimal.yaml
-├── scr/
-│   └── ...
-└── Cargo.toml
-Runtime (after install):
-/etc/panicmode/
-├── config.yaml           # Main config
-└── mass_freeze.yaml      # Mass freeze config

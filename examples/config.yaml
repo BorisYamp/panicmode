@@ -2,9 +2,9 @@
 # PanicMode: Main Configuration
 # =============================================================================
 #
-# Этот файл определяет ЧТО мониторить и КОГДА реагировать.
+# This file defines WHAT to monitor and WHEN to react.
 #
-# Документация: https://github.com/BorisYamp/panicmode
+# Documentation: https://github.com/BorisYamp/panicmode
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -27,58 +27,58 @@ storage:
   state_file: /var/lib/panicmode/incident_state.json
 
 # -----------------------------------------------------------------------------
-# Производительность самого PanicMode
+# PanicMode performance settings
 # -----------------------------------------------------------------------------
 performance:
-  # Максимальное потребление CPU (%)
+  # Maximum CPU usage (%)
   cpu_limit: 5.0
 
-  # Максимальное потребление памяти (MB)
+  # Maximum memory usage (MB)
   memory_limit_mb: 50
 
-  # Интервал проверки метрик (рекомендуется: 5-10s)
+  # Metric check interval (recommended: 5-10s)
   check_interval: 5s
 
 # -----------------------------------------------------------------------------
 # Anomaly Detector thresholds
 # -----------------------------------------------------------------------------
-# Эти пороги используются встроенным детектором аномалий (anomaly.rs),
-# который работает параллельно с правилами мониторов.
-# Детектор аномалий ищет экстремальные ситуации, которые не покрываются правилами.
+# These thresholds are used by the built-in anomaly detector (anomaly.rs),
+# which runs in parallel with monitor rules.
+# The anomaly detector looks for extreme conditions not covered by monitor rules.
 anomaly:
-  # CPU: срабатывает при cpu_usage >= порога (без доп. условий)
+  # CPU: fires when cpu_usage >= threshold (no additional conditions)
   cpu_spike_threshold: 95.0
 
-  # Memory: срабатывает при memory_usage >= порога И swap > 50%
+  # Memory: fires when memory_usage >= threshold AND swap > 50%
   memory_spike_threshold: 95.0
 
-  # Connections: срабатывает при active_connections > порога
+  # Connections: fires when active_connections > threshold
   connection_spike_threshold: 10000
 
-  # Suspicious IPs: срабатывает при кол-ве подозрительных IP >= порога
+  # Suspicious IPs: fires when the number of suspicious IPs >= threshold
   suspicious_ip_threshold: 3
 
-  # Порог соединений от одного IP для пометки как "подозрительного"
-  # IP считается подозрительным если у него >= suspicious_connections_per_ip соединений
+  # Connection threshold per IP to mark it as "suspicious"
+  # An IP is considered suspicious if it has >= suspicious_connections_per_ip connections
   suspicious_connections_per_ip: 50
 
-  # Load average: срабатывает при load_avg_1m >= порога
-  # (независимо от CPU — ловит I/O-bound перегрузку)
-  # Рекомендуется: количество ядер × 2
+  # Load average: fires when load_avg_1m >= threshold
+  # (independent of CPU — catches I/O-bound overload)
+  # Recommended: number of CPU cores × 2
   high_load_threshold: 10.0
 
 # -----------------------------------------------------------------------------
 # HTTP API (healthcheck endpoint)
 # -----------------------------------------------------------------------------
-# Минимальный HTTP-сервер для интеграции с балансировщиками и мониторингом.
+# Minimal HTTP server for integration with load balancers and monitoring.
 # GET /health → 200 {"status":"ok","uptime_secs":N}
-# Любой другой путь → 404
+# Any other path → 404
 http_api:
-  enabled: false                  # Включить: true
-  bind: "127.0.0.1:8765"          # Только localhost по умолчанию
+  enabled: false                  # Set to true to enable
+  bind: "127.0.0.1:8765"          # Localhost only by default
 
 # -----------------------------------------------------------------------------
-# Мониторы (правила детектирования проблем)
+# Monitors (problem detection rules)
 # -----------------------------------------------------------------------------
 monitors:
   # === CPU MONITORING ===
@@ -190,8 +190,8 @@ monitors:
     enabled: true
 
   # === LOAD AVERAGE MONITORING ===
-  # Рекомендуется: threshold = количество CPU ядер × 1.5 (warning)
-  # и × 3.0 (critical)
+  # Recommended: threshold = number of CPU cores × 1.5 (warning)
+  # and × 3.0 (critical)
 
   - name: "High Load Average"
     type: load_average
@@ -245,7 +245,7 @@ monitors:
     enabled: true
 
 # -----------------------------------------------------------------------------
-# Actions (пользовательские скрипты)
+# Actions (custom scripts)
 # -----------------------------------------------------------------------------
 actions:
   block_malicious:
@@ -261,7 +261,7 @@ actions:
     action: /opt/panicmode/scripts/backup.sh
 
 # -----------------------------------------------------------------------------
-# Alerts (каналы уведомлений)
+# Alerts (notification channels)
 # -----------------------------------------------------------------------------
 alerts:
   critical:
@@ -288,7 +288,7 @@ alerts:
     - channel: ntfy
 
 # -----------------------------------------------------------------------------
-# Integrations (внешние сервисы)
+# Integrations (external services)
 # -----------------------------------------------------------------------------
 integrations:
   telegram:
@@ -304,7 +304,7 @@ integrations:
     enabled: true
     server: "https://ntfy.sh"
     topic: "panicmode-alerts"
-    token: null   # optional, для приватных топиков
+    token: null   # optional, for private topics
 
   email:
     enabled: true
@@ -324,7 +324,7 @@ integrations:
     from_number: "+1234567890"
 
 # -----------------------------------------------------------------------------
-# Custom Metrics (пользовательские метрики)
+# Custom Metrics (user-defined metrics)
 # -----------------------------------------------------------------------------
 custom_metrics:
   redis_memory:
@@ -337,7 +337,7 @@ custom_metrics:
     command: "/opt/scripts/check_queue.sh"
     timeout: 10s
     cache_ttl: 60s
-    output_format: json   # Ожидает {"value": 123}
+    output_format: json   # Expects {"value": 123}
 
   app_health:
     command: "curl -s localhost:8080/health | jq .score"
@@ -353,7 +353,7 @@ file_monitor:
   aggregation_window: 60s
 
 # -----------------------------------------------------------------------------
-# Circuit Breakers (для action выполнения)
+# Circuit Breakers (for action execution)
 # -----------------------------------------------------------------------------
 circuit_breakers:
   max_failures: 5

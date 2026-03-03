@@ -1,0 +1,18 @@
+# Build artifacts
+target/
+
+# Version control
+.git/
+.github/
+
+# Documentation (not needed in image)
+*.md
+arch.txt
+
+# Example configs (runtime config is mounted as a volume)
+examples/
+
+# Dev/test files
+tests/
+*.log
+*.db

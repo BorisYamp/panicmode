@@ -32,7 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Circuit breaker on action executor — opens after repeated failures, resets automatically
 
 **Actions**
-- `freeze_processes` — SIGSTOP top CPU offenders (configurable count, whitelist for `sshd`, `panicmode`, etc.)
+- `freeze_top_process` — SIGSTOP the single top CPU offender (whitelists `sshd`, `panicmode`, root processes)
+- `mass_freeze` — SIGSTOP all non-whitelisted processes (nuclear option)
+- `mass_freeze_top` — SIGSTOP top N CPU offenders (count configured in `mass_freeze.yaml`)
+- `mass_freeze_cluster:<name>` — SIGSTOP a named cluster of processes (defined in `mass_freeze.yaml`)
 - `block_ip` — invoke user-supplied firewall script per attacking IP
 - `snapshot` — capture `ps`, `netstat`, `free`, `df`, `uptime` to a timestamped file
 - `run_script` — execute custom script with incident context via environment variables

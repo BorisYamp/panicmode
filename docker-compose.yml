@@ -1,0 +1,84 @@
+# =============================================================================
+# PanicMode — Docker Compose
+# =============================================================================
+#
+# Quick start:
+#   mkdir config
+#   cp examples/config.yaml config/config.yaml
+#   # Edit config/config.yaml — fill in your bot tokens, chat IDs, etc.
+#   docker compose up -d
+#
+# Logs:
+#   docker compose logs -f
+#
+# panicmode-ctl:
+#   docker exec panicmode panicmode-ctl list
+#   docker exec panicmode panicmode-ctl unblock 1.2.3.4
+# =============================================================================
+
+services:
+  panicmode:
+    build: .
+    image: panicmode:latest
+    container_name: panicmode
+    restart: unless-stopped
+
+    # ── Host namespace access ────────────────────────────────────────────────
+    #
+    # pid: host   — share the host's PID namespace so PanicMode can:
+    #               • Read /proc/<pid>/* for accurate process metrics
+    #               • Send SIGSTOP/SIGCONT to host processes (freeze/unfreeze)
+    #
+    # network_mode: host — share the host's network namespace so:
+    #               • iptables rules from block_ip scripts affect the real host
+    #               • No port mapping needed for outbound alerts
+    #
+    pid: host
+    network_mode: host
+
+    # ── Linux capabilities ───────────────────────────────────────────────────
+    #
+    # SYS_PTRACE — read /proc/<pid>/fd (process file descriptor monitoring)
+    # NET_ADMIN  — run iptables for the block_ip action
+    #
+    # These are the minimum required capabilities. Do NOT add --privileged
+    # unless you specifically need it for something else.
+    #
+    cap_add:
+      - SYS_PTRACE
+      - NET_ADMIN
+
+    volumes:
+      # ── Config (read-only) ─────────────────────────────────────────────────
+      # Create ./config/config.yaml before running.
+      # Optionally add ./config/mass_freeze.yaml for cluster freeze support.
+      - ./config:/etc/panicmode:ro
+
+      # ── Auth log (read-only) ───────────────────────────────────────────────
+      # Required for SSH brute-force detection (auth_failures monitor).
+      # Debian/Ubuntu path — change to /var/log/secure for RHEL/CentOS/Fedora.
+      - ${AUTH_LOG_PATH:-/var/log/auth.log}:/var/log/auth.log:ro
+
+      # ── Persistent data ────────────────────────────────────────────────────
+      # SQLite incident database + deduplication state.
+      # Survives container restarts and upgrades.
+      - panicmode_data:/var/lib/panicmode
+
+      # ── Logs and snapshots ─────────────────────────────────────────────────
+      # Rolling daily log files and incident snapshots (ps, ss, free, df).
+      - panicmode_logs:/var/log/panicmode
+
+      # ── Control socket ─────────────────────────────────────────────────────
+      # Exposes the Unix socket at /run/panicmode/ctl.sock on the host,
+      # so you can run panicmode-ctl directly from the host shell:
+      #   PANICMODE_CTL_SOCKET=/run/panicmode/ctl.sock panicmode-ctl list
+      # Or simply: docker exec panicmode panicmode-ctl list
+      - /run/panicmode:/run/panicmode
+
+    environment:
+      # Override with 'debug' or 'trace' for troubleshooting
+      - RUST_LOG=panicmode=info
+
+volumes:
+  panicmode_data:
+  panicmode_logs:

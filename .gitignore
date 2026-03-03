@@ -28,6 +28,10 @@ tmpclaude-*
 config.yaml
 !examples/config.yaml
 
+# Local Docker Compose environment (may contain credentials)
+.env
+!.env.example
+
 # Local test databases and state files
 *.db
 *.sqlite

@@ -86,6 +86,36 @@ See [QUICKSTART.md](QUICKSTART.md) for detailed setup of each alert channel.
 
 ---
 
+## Running with Docker
+
+No Rust installation required — Docker builds everything inside the container.
+
+```bash
+# 1. Create config dir and copy the example config
+mkdir config
+cp examples/config.yaml config/config.yaml
+# Edit config/config.yaml — fill in bot tokens, chat IDs, etc.
+
+# 2. Build and start
+docker compose up -d
+
+# 3. View logs
+docker compose logs -f
+```
+
+**Using panicmode-ctl from Docker:**
+
+```bash
+docker exec panicmode panicmode-ctl list
+docker exec panicmode panicmode-ctl unblock 1.2.3.4
+```
+
+**How it works:** The container runs with `--pid=host` and `--network=host`, so it sees and can act on the real host system — process freezing (SIGSTOP), IP blocking (iptables), and `/proc` metrics all work exactly as in a native install.
+
+**Auth log path:** `docker-compose.yml` mounts `/var/log/auth.log` (Debian/Ubuntu). For RHEL/CentOS/Fedora, change it to `/var/log/secure`.
+
+---
+
 ## Alert Channels
 
 | Channel | Free | Setup time |
@@ -108,10 +138,11 @@ See [QUICKSTART.md](QUICKSTART.md) for detailed setup of each alert channel.
 | `load_average` | 1/5/15 min load averages |
 | `disk_usage` | Per-mount disk fill % |
 | `disk_io` | Read/write throughput and IOPS |
-| `network_connections` | Total open connections |
+| `connection_rate` | Total open connections and new connection rate |
 | `auth_failures` | Failed SSH/sudo logins, brute-force IPs |
-| `file_changes` | Modifications to watched paths |
-| `custom_metrics` | Output of your own scripts |
+| `file_monitor` | Modifications to watched paths |
+| `custom` | Output of your own scripts |
+| `process_count` | Number of running processes |
 
 ---
 
@@ -119,7 +150,10 @@ See [QUICKSTART.md](QUICKSTART.md) for detailed setup of each alert channel.
 
 When an incident fires, PanicMode can:
 
-- **`freeze_processes`** — SIGSTOP the top CPU offenders (whitelists `sshd`, `panicmode`, etc.)
+- **`freeze_top_process`** — SIGSTOP the single top CPU offender (whitelists `sshd`, `panicmode`, etc.)
+- **`mass_freeze`** — SIGSTOP all non-whitelisted processes (emergency measure)
+- **`mass_freeze_top`** — SIGSTOP the top N CPU offenders (configurable in `mass_freeze.yaml`)
+- **`mass_freeze_cluster:<name>`** — SIGSTOP a named group of processes (defined in `mass_freeze.yaml`)
 - **`block_ip`** — Run your firewall script to drop the attacking IP; blocks are persisted in SQLite and restored after reboot; manage with `panicmode-ctl list` / `panicmode-ctl unblock <IP>`
 - **`snapshot`** — Capture `ps`, `netstat`, `free`, `df`, `uptime` to a timestamped file
 - **`run_script`** — Execute any custom script with incident context in environment variables
@@ -129,27 +163,32 @@ When an incident fires, PanicMode can:
 
 ## Configuration Reference
 
-See [exampels/config.yaml](exampels/config.yaml) for a fully-annotated example.
+See [examples/config.yaml](examples/config.yaml) for a fully-annotated example.
 
 Key sections:
 
 ```yaml
-storage:        # paths for DB, snapshots, logs
-monitors:       # which metrics to watch and thresholds
-alerts:         # Telegram / email / Discord / ntfy / Twilio
-integrations:   # credentials for each alert channel
-performance:    # polling intervals, timeouts
-firewall:       # block_ip script paths, whitelist, restore_on_startup
-actions:        # per-action settings (script paths, etc.)
+storage:          # paths for DB, snapshots, logs
+performance:      # polling interval, CPU/memory limits for PanicMode itself
+monitors:         # which metrics to watch and thresholds
+alerts:           # Telegram / email / Discord / ntfy / Twilio routing by severity
+integrations:     # credentials for each alert channel
+actions:          # custom script definitions for run_script action
+anomaly:          # spike detection thresholds (runs alongside monitor rules)
+circuit_breakers: # fault tolerance for action execution
+firewall:         # block_ip script paths, whitelist, restore_on_startup
+http_api:         # optional healthcheck endpoint (GET /health)
+custom_metrics:   # arbitrary shell commands to collect extra metrics
+file_monitor:     # settings for the file_monitor monitor type
 ```
 
-For process freeze whitelist, create `/etc/panicmode/mass_freeze.yaml` (see [exampels/mass_freeze.yaml](exampels/mass_freeze.yaml)).
+For process freeze whitelist, create `/etc/panicmode/mass_freeze.yaml` (see [examples/mass_freeze.yaml](examples/mass_freeze.yaml)).
 
 ---
 
 ## Architecture
 
-PanicMode runs five supervised async tasks plus one auxiliary (ctl socket):
+PanicMode runs four supervised async tasks plus one auxiliary (ctl socket) and an optional HTTP API task:
 
 ```
 MonitorEngine ──metrics──▶ Detector ──incidents──▶ IncidentHandler

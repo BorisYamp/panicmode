@@ -1,4 +1,3 @@
-/// Path: PanicMode/QUICKSTART.md
 # PanicMode Quick Start - All Integrations
 
 ## Setup Guide for All Channels
@@ -326,4 +325,3 @@ Set threshold low and wait for alert
 - ✅ Adjust thresholds for your server
 - ✅ Install as systemd service
 - ✅ Monitor PanicMode logs
-- ✅ Review `examples/advanced.yaml` for more features

@@ -64,6 +64,13 @@ if [[ "$CONFIG_ONLY" == false ]]; then
     echo "Installing binary to $INSTALL_DIR/$BINARY_NAME..."
     install -m 755 "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
     green "Binary installed: $INSTALL_DIR/$BINARY_NAME"
+
+    CTL_PATH="target/release/panicmode-ctl"
+    [[ -f "$CTL_PATH" ]] || die "Binary not found: $CTL_PATH (build failed?)"
+
+    echo "Installing binary to $INSTALL_DIR/panicmode-ctl..."
+    install -m 755 "$CTL_PATH" "$INSTALL_DIR/panicmode-ctl"
+    green "Binary installed: $INSTALL_DIR/panicmode-ctl"
 fi
 
 # ─── config ───────────────────────────────────────────────────────────────────

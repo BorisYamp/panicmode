@@ -22,7 +22,7 @@ use crate::detector::{Incident, IncidentSeverity};
 // Public interface
 // ============================================================================
 
-/// Запись о заблокированном IP из таблицы blocked_ips.
+/// A record of a blocked IP from the blocked_ips table.
 #[derive(Debug, Clone)]
 pub struct BlockedIp {
     pub ip: String,
@@ -70,8 +70,8 @@ impl IncidentStorage {
         Ok(storage)
     }
 
-    /// Записать заблокированный IP в БД.
-    /// Если IP уже есть в списке — ничего не делаем (он уже заблокирован).
+    /// Record a blocked IP in the DB.
+    /// If the IP is already present — do nothing (it is already blocked).
     pub async fn add_blocked_ip(&self, ip: &str, reason: &str) -> Result<()> {
         let conn = self.conn.clone();
         let ip = ip.to_string();
@@ -94,7 +94,7 @@ impl IncidentStorage {
         Ok(())
     }
 
-    /// Удалить IP из списка заблокированных.
+    /// Remove an IP from the blocked list.
     pub async fn remove_blocked_ip(&self, ip: &str) -> Result<()> {
         let conn = self.conn.clone();
         let ip = ip.to_string();
@@ -106,7 +106,7 @@ impl IncidentStorage {
                 rusqlite::params![ip],
             )?;
             if rows == 0 {
-                anyhow::bail!("IP {} не найден в списке заблокированных", ip);
+                anyhow::bail!("IP {} not found in the blocked list", ip);
             }
             Ok::<(), anyhow::Error>(())
         })
@@ -115,7 +115,7 @@ impl IncidentStorage {
         Ok(())
     }
 
-    /// Вернуть список всех заблокированных IP.
+    /// Return the list of all blocked IPs.
     pub async fn get_active_blocked_ips(&self) -> Result<Vec<BlockedIp>> {
         let conn = self.conn.clone();
 

@@ -3,297 +3,295 @@
 # PanicMode: Mass Freeze Configuration
 # =============================================================================
 # 
-# Этот файл определяет КАК выполнять массовую заморозку процессов.
-# Редактируйте под вашу инфраструктуру!
+# This file defines HOW to perform a mass process freeze.
+# Edit it to match your infrastructure!
+#
+# Documentation: https://github.com/BorisYamp/panicmode
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Режим работы массовой заморозки
+# Mass freeze mode
 # -----------------------------------------------------------------------------
-# Определяет стратегию выбора процессов для заморозки.
+# Defines the strategy for selecting processes to freeze.
 #
-# Доступные режимы:
-#   all      - Заморозить ВСЁ кроме whitelist (экстренная "ядерная кнопка")
-#   top_cpu  - Заморозить N самых прожорливых по CPU процессов
-#   cluster  - Заморозить определённую группу связанных процессов
+# Available modes:
+#   all      - Freeze EVERYTHING except the whitelist (emergency "nuclear button")
+#   top_cpu  - Freeze the N most CPU-hungry processes
+#   cluster  - Freeze a specific named group of related processes
 #
-# По умолчанию: all
+# Default: all
 mode: all
 
 # -----------------------------------------------------------------------------
-# Настройки для режима: top_cpu
+# Settings for mode: top_cpu
 # -----------------------------------------------------------------------------
-# Применяются только когда mode: top_cpu
+# Applied only when mode: top_cpu
 top_cpu:
-  # Количество процессов для заморозки (топ по CPU usage)
-  # Процессы сортируются по CPU usage по убыванию, берутся первые N
+  # Number of processes to freeze (top by CPU usage)
+  # Processes are sorted by CPU usage descending; the first N are taken
   count: 5
-  
-  # Минимальный CPU usage для заморозки (опционально)
-  # Процесс с CPU < min_cpu_percent не будет заморожен даже если в топе
+
+  # Minimum CPU usage required to freeze (optional)
+  # A process with CPU < min_cpu_percent will not be frozen even if in the top list
   # min_cpu_percent: 10.0
 
 # -----------------------------------------------------------------------------
-# Настройки для режима: cluster
+# Settings for mode: cluster
 # -----------------------------------------------------------------------------
-# Применяются только когда mode: cluster
+# Applied only when mode: cluster
 cluster:
-  # Метод определения кластеров:
+  # Method for determining clusters:
   #
-  #   manual - Вручную описываете группы процессов (РЕКОМЕНДУЕТСЯ)
-  #            Работает везде, полный контроль
+  #   manual - Manually describe process groups (RECOMMENDED)
+  #            Works everywhere, full control
   #
-  #   cgroup - Автоматически из systemd cgroups (только Linux с systemd)
-  #            Автоматическое определение границ сервисов
+  #   cgroup - Automatically from systemd cgroups (Linux with systemd only)
+  #            Automatic detection of service boundaries
   #
-  # По умолчанию: manual
+  # Default: manual
   detection: manual
-  
+
   # ---------------------------------------------------------------------------
-  # Для detection: manual
+  # For detection: manual
   # ---------------------------------------------------------------------------
-  # Опишите логические группы (кластеры) процессов на вашем сервере.
-  # Каждый кластер - это набор имён процессов.
-  # Процесс попадает в кластер, если его имя СОДЕРЖИТ одно из указанных слов.
+  # Describe the logical groups (clusters) of processes on your server.
+  # Each cluster is a set of process names.
+  # A process belongs to a cluster if its name CONTAINS one of the listed words.
   #
-  # Формат:
+  # Format:
   #   cluster_name:
   #     - process_name_1
   #     - process_name_2
   #
-  # Пример использования в monitor:
+  # Usage in a monitor:
   #   actions:
   #     - mass_freeze_cluster:website
   definitions:
-    # Кластер "website" - основной сайт компании
-    # Типичный LAMP/LEMP stack
+    # Cluster "website" — main company website (typical LAMP/LEMP stack)
     website:
-      - nginx           # Веб-сервер
-      - php-fpm         # PHP обработчик
-      - mysqld          # MySQL база данных
-      - apache2         # Альтернатива nginx
-    
-    # Кластер "crm" - внутренняя CRM система
-    # Современный Node.js + Redis + PostgreSQL stack
+      - nginx           # Web server
+      - php-fpm         # PHP handler
+      - mysqld          # MySQL database
+      - apache2         # Alternative to nginx
+
+    # Cluster "crm" — internal CRM (Node.js + Redis + PostgreSQL stack)
     crm:
-      - node            # Node.js backend (будьте осторожны - может быть много!)
-      - redis-server    # Кеш/очереди
-      - postgres        # PostgreSQL база
-    
-    # Кластер "api" - микросервисная архитектура
-    # Если у вас есть отдельный API layer
+      - node            # Node.js backend (be careful — may have many processes!)
+      - redis-server    # Cache / queues
+      - postgres        # PostgreSQL database
+
+    # Cluster "api" — microservice API layer
     api:
-      - gunicorn        # Python WSGI сервер
+      - gunicorn        # Python WSGI server
       - celery          # Task queue workers
       - rabbitmq        # Message broker
-    
-    # Кластер "monitoring" - системы мониторинга
-    # ВАЖНО: Обычно НЕ нужно замораживать, держите работающим!
+
+    # Cluster "monitoring" — monitoring systems
+    # NOTE: Usually do NOT freeze these — keep them running!
     monitoring:
       - prometheus
       - grafana-server
       - node_exporter
       - alertmanager
-    
-    # Кластер "docker" - контейнеризованные приложения
-    # Если запускаете сервисы в Docker
+
+    # Cluster "docker" — containerised applications
     docker:
       - dockerd
       - containerd
       - docker-proxy
-    
+
     # -------------------------------------------------------------------------
-    # Добавьте свои кластеры ниже
+    # Add your own clusters below
     # -------------------------------------------------------------------------
-    # 
+    #
     # my_app:
     #   - my-service-name
     #   - my-worker-process
     #   - my-database
-    # 
+    #
     # payment_system:
     #   - payment-gateway
     #   - stripe-webhook
     #   - transaction-processor
-  
+
   # ---------------------------------------------------------------------------
-  # Для detection: cgroup
+  # For detection: cgroup
   # ---------------------------------------------------------------------------
-  # Маппинг понятных имён на systemd service names
-  # Позволяет использовать короткие имена вместо полных service names
+  # Mapping of friendly names to systemd service names.
+  # Lets you use short names instead of full service names.
   #
-  # Формат:
+  # Format:
   #   alias_name: service_name.service
   #
-  # Пример использования:
+  # Usage:
   #   actions:
-  #     - mass_freeze_cluster:webserver  # вместо nginx.service
+  #     - mass_freeze_cluster:webserver  # instead of nginx.service
   service_aliases:
     webserver: nginx.service
     database: postgresql.service
     cache: redis.service
     webapp: my-app.service
-    
-    # Добавьте свои маппинги:
+
+    # Add your own mappings:
     # backend: my-backend.service
     # frontend: my-frontend.service
 
 # -----------------------------------------------------------------------------
-# Whitelist - процессы которые НИКОГДА не замораживаем
+# Whitelist — processes that are NEVER frozen
 # -----------------------------------------------------------------------------
-# Применяется для ВСЕХ режимов после основной фильтрации.
-# Даже если процесс попал в топ CPU или в кластер - whitelist его спасёт.
+# Applied for ALL modes after the main filtering step.
+# Even if a process ends up in the top-CPU list or in a cluster — the whitelist saves it.
 #
-# ВАЖНО: Помимо этого списка автоматически НЕ замораживаются (hardcoded):
-#   - Все root процессы
-#   - Процессы с "sshd" в имени (критично для удалённого доступа!)
-#   - Собственный процесс PanicMode
-#   - Родительские процессы до init/systemd
+# IMPORTANT: In addition to this list, the following are always protected (hardcoded):
+#   - All root processes
+#   - Processes with "sshd" in their name (critical for remote access!)
+#   - PanicMode's own process
+#   - Parent processes up to init/systemd
 whitelist_processes:
-  # ===== КРИТИЧНО: НЕ УДАЛЯЙТЕ! =====
-  
-  # SSH daemon - БЕЗ ЭТОГО ПОТЕРЯЕТЕ УДАЛЁННЫЙ ДОСТУП!
+  # ===== CRITICAL: DO NOT REMOVE! =====
+
+  # SSH daemon — WITHOUT THIS YOU WILL LOSE REMOTE ACCESS!
   - sshd
-  
-  # PanicMode сам себя (не замораживать!)
+
+  # PanicMode itself (do not freeze!)
   - panicmode
-  
-  # ===== СИСТЕМНЫЕ СЕРВИСЫ =====
-  
-  # Мониторинг (чтобы видеть что происходит)
+
+  # ===== SYSTEM SERVICES =====
+
+  # Monitoring (so you can see what is happening)
   - prometheus
   - node_exporter
   - grafana-server
   - collectd
   - telegraf
-  
-  # Логирование (чтобы не потерять логи инцидента)
+
+  # Logging (so incident logs are not lost)
   - rsyslogd
   - journald
   - fluentd
   - logstash
-  
-  # ===== КРИТИЧНЫЕ ДЛЯ БИЗНЕСА =====
-  
-  # Добавьте процессы, которые ВСЕГДА должны работать:
-  # 
-  # - payment-processor    # Платёжная система
-  # - backup-daemon        # Бэкапы
-  # - critical-api         # Критичный API
-  
-  # ===== ВАШ WHITELIST =====
-  
-  # Примеры (раскомментируйте и адаптируйте):
-  # - nginx                # Если веб-сервер всегда должен работать
-  # - postgres             # Если база всегда критична
-  # - redis-server         # Если кеш критичен
+
+  # ===== BUSINESS-CRITICAL =====
+
+  # Add processes that must ALWAYS keep running:
+  #
+  # - payment-processor    # Payment system
+  # - backup-daemon        # Backup daemon
+  # - critical-api         # Critical API
+
+  # ===== YOUR WHITELIST =====
+
+  # Examples (uncomment and adapt):
+  # - nginx                # If the web server must always run
+  # - postgres             # If the database is always critical
+  # - redis-server         # If the cache is critical
 
 # -----------------------------------------------------------------------------
-# Расширенные настройки (опционально)
+# Advanced settings (optional)
 # -----------------------------------------------------------------------------
 
-# Таймаут на операцию заморозки (защита от зависания)
-# Если заморозка всех процессов занимает больше времени - прервать
+# Freeze operation timeout (protection against hanging)
+# If freezing all processes takes longer than this — abort
 # freeze_timeout: 30s
 
-# Максимальное количество процессов для заморозки за раз
-# Защита от случайной заморозки тысяч процессов
+# Maximum number of processes to freeze at once
+# Protection against accidentally freezing thousands of processes
 # max_processes_to_freeze: 1000
 
-# Dry-run режим (только показать что будет заморожено, не замораживать)
-# Полезно для тестирования конфигурации
+# Dry-run mode (only show what would be frozen, do not actually freeze)
+# Useful for testing the configuration
 # dry_run: false
 
 # -----------------------------------------------------------------------------
-# Примеры использования в config.yaml
+# Usage examples in config.yaml
 # -----------------------------------------------------------------------------
 #
 # monitors:
-#   # Пример 1: Тотальная заморозка при критической перегрузке
+#   # Example 1: Total freeze on critical overload
 #   - name: "Total System Overload"
 #     type: cpu_usage
 #     threshold: 99
 #     actions:
-#       - mass_freeze              # Использует mode из mass_freeze.yaml
+#       - mass_freeze              # Uses mode from mass_freeze.yaml
 #       - snapshot
 #       - alert_critical
 #
-#   # Пример 2: Точечная заморозка топ процессов
+#   # Example 2: Targeted freeze of top CPU processes
 #   - name: "High CPU from Multiple Processes"
 #     type: cpu_usage
 #     threshold: 95
 #     actions:
-#       - mass_freeze_top          # Режим top_cpu
+#       - mass_freeze_top          # top_cpu mode
 #       - alert_warning
 #
-#   # Пример 3: Заморозка конкретного кластера
+#   # Example 3: Freeze a specific cluster
 #   - name: "Website CPU Spike"
 #     type: cpu_usage
 #     threshold: 90
 #     actions:
-#       - mass_freeze_cluster:website   # Только кластер website
+#       - mass_freeze_cluster:website   # website cluster only
 #       - alert_warning
 #
-#   # Пример 4: Заморозка при подозрении на взлом
+#   # Example 4: Freeze on suspected intrusion
 #   - name: "Suspicious Activity"
 #     type: auth_failures
 #     threshold: 50
 #     actions:
-#       - mass_freeze              # Заморозить всё
-#       - snapshot                 # Снять snapshot для forensics
-#       - alert_critical           # Немедленно оповестить
+#       - mass_freeze              # Freeze everything
+#       - snapshot                 # Capture snapshot for forensics
+#       - alert_critical           # Alert immediately
 
 # -----------------------------------------------------------------------------
-# Восстановление после заморозки
+# Recovery after a freeze
 # -----------------------------------------------------------------------------
 #
-# ВАЖНО: НЕТ автоматической разморозки!
-# Процессы остаются замороженными пока вы сами их не разморозите.
+# IMPORTANT: There is NO automatic unfreeze!
+# Processes remain frozen until you manually unfreeze them.
 #
-# Разморозка:
-#   1. Подключитесь по SSH:
+# To unfreeze:
+#   1. Connect via SSH:
 #      ssh admin@your-server
 #
-#   2. Разморозьте процессы:
-#      # Разморозить всё:
+#   2. Unfreeze processes:
+#      # Unfreeze everything:
 #      sudo /usr/local/bin/panicmode-unfreeze
 #
-#      # Разморозить конкретный режим/кластер:
+#      # Unfreeze a specific mode/cluster:
 #      sudo /usr/local/bin/panicmode-unfreeze all
 #      sudo /usr/local/bin/panicmode-unfreeze top_cpu
 #      sudo /usr/local/bin/panicmode-unfreeze website
 #
-#   3. Проверьте состояние системы перед разморозкой!
-#      top                # Текущая нагрузка
-#      ps aux            # Список процессов
-#      journalctl -xe    # Логи системы
+#   3. Check system state before unfreezing!
+#      top                # Current load
+#      ps aux             # Process list
+#      journalctl -xe     # System logs
 #
-# State файлы (информация о замороженных процессах):
-#   /tmp/panicmode_frozen_all.state        # Для mode: all
-#   /tmp/panicmode_frozen_top_cpu.state    # Для mode: top_cpu
-#   /tmp/panicmode_frozen_website.state    # Для cluster: website
+# State files (information about frozen processes):
+#   /tmp/panicmode_frozen_all.state        # For mode: all
+#   /tmp/panicmode_frozen_top_cpu.state    # For mode: top_cpu
+#   /tmp/panicmode_frozen_website.state    # For cluster: website
 
 # -----------------------------------------------------------------------------
-# Предупреждения
+# Warnings
 # -----------------------------------------------------------------------------
 #
-# ⚠️  ВНИМАНИЕ: Mass Freeze - это экстренная мера!
+# ⚠️  WARNING: Mass Freeze is an emergency measure!
 #
-# Что произойдёт при заморозке:
-#   - Веб-серверы перестанут отвечать на запросы
-#   - Базы данных не будут обрабатывать транзакции
-#   - Приложения "зависнут" для пользователей
-#   - Системные сервисы (root) продолжат работу
-#   - SSH доступ сохранится (критично!)
+# What happens when you freeze:
+#   - Web servers stop responding to requests
+#   - Databases stop processing transactions
+#   - Applications "hang" for users
+#   - System services (root) continue running
+#   - SSH access is preserved (critical!)
 #
-# Используйте только когда:
-#   ✓ Критическая перегрузка системы (CPU 99%, Memory 99%)
-#   ✓ Подозрение на взлом / вредоносный код
-#   ✓ DDoS атака на уровне приложений
-#   ✓ Runaway процесс жрёт все ресурсы
-#   ✓ Другие меры не помогли
+# Use only when:
+#   ✓ Critical system overload (CPU 99%, Memory 99%)
+#   ✓ Suspected intrusion / malicious code
+#   ✓ Application-layer DDoS attack
+#   ✓ A runaway process is consuming all resources
+#   ✓ Other measures have not helped
 #
-# НЕ используйте для:
-#   ✗ Плановых работ (есть более мягкие способы)
-#   ✗ Обычных нагрузок (настройте лучше автоскейлинг)
-#   ✗ Тестирования (используйте dry_run: true)
+# Do NOT use for:
+#   ✗ Planned maintenance (there are gentler approaches)
+#   ✗ Normal load (configure autoscaling instead)
+#   ✗ Testing (use dry_run: true)

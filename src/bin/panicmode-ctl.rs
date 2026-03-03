@@ -1,11 +1,11 @@
-/// panicmode-ctl — CLI для управления демоном PanicMode через Unix-сокет.
+/// panicmode-ctl — CLI for managing the PanicMode daemon via Unix socket.
 ///
-/// Использование:
-///   panicmode-ctl list                # список заблокированных IP
-///   panicmode-ctl unblock 1.2.3.4    # снять блок вручную
+/// Usage:
+///   panicmode-ctl list                # list all blocked IPs
+///   panicmode-ctl unblock 1.2.3.4    # remove a block manually
 ///
-/// Путь к сокету: /run/panicmode/ctl.sock
-/// Переопределить: PANICMODE_CTL_SOCKET=/другой/путь panicmode-ctl list
+/// Socket path: /run/panicmode/ctl.sock
+/// Override:    PANICMODE_CTL_SOCKET=/other/path panicmode-ctl list
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
@@ -19,11 +19,11 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
-        eprintln!("Использование: panicmode-ctl <команда> [аргументы]");
+        eprintln!("Usage: panicmode-ctl <command> [arguments]");
         eprintln!();
-        eprintln!("Команды:");
-        eprintln!("  list                  Показать все активные блоки IP");
-        eprintln!("  unblock <IP>          Снять блокировку с указанного IP");
+        eprintln!("Commands:");
+        eprintln!("  list                  Show all active IP blocks");
+        eprintln!("  unblock <IP>          Remove block for the specified IP");
         std::process::exit(1);
     }
 
@@ -34,13 +34,13 @@ fn main() {
         "list" => json!({"cmd": "list"}),
         "unblock" => {
             if args.len() < 3 {
-                eprintln!("Ошибка: укажите IP-адрес. Пример: panicmode-ctl unblock 1.2.3.4");
+                eprintln!("Error: specify an IP address. Example: panicmode-ctl unblock 1.2.3.4");
                 std::process::exit(1);
             }
             json!({"cmd": "unblock", "ip": args[2]})
         }
         cmd => {
-            eprintln!("Неизвестная команда: {}", cmd);
+            eprintln!("Unknown command: {}", cmd);
             std::process::exit(1);
         }
     };
@@ -48,7 +48,7 @@ fn main() {
     match run(&socket_path, &request) {
         Ok(()) => {}
         Err(e) => {
-            eprintln!("Ошибка: {}", e);
+            eprintln!("Error: {}", e);
             std::process::exit(1);
         }
     }
@@ -57,7 +57,7 @@ fn main() {
 fn run(socket_path: &str, request: &Value) -> Result<(), String> {
     let mut stream = UnixStream::connect(socket_path)
         .map_err(|e| format!(
-            "Не удалось подключиться к {} — демон запущен? ({})",
+            "Could not connect to {} — is the daemon running? ({})",
             socket_path, e
         ))?;
 
@@ -66,20 +66,20 @@ fn run(socket_path: &str, request: &Value) -> Result<(), String> {
     stream.set_read_timeout(Some(Duration::from_secs(10)))
         .map_err(|e| format!("set_read_timeout: {}", e))?;
 
-    // Отправляем запрос
+    // Send request
     let mut payload = serde_json::to_string(request)
         .map_err(|e| format!("serialization: {}", e))?;
     payload.push('\n');
     stream.write_all(payload.as_bytes())
         .map_err(|e| format!("write: {}", e))?;
 
-    // Читаем ответ
+    // Read response
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
     reader.read_line(&mut line)
         .map_err(|e| format!("read: {}", e))?;
 
-    // Разбираем и выводим
+    // Parse and display
     let response: CtlResponse = serde_json::from_str(line.trim())
         .map_err(|e| format!("invalid response from daemon: {}", e))?;
 
@@ -87,7 +87,7 @@ fn run(socket_path: &str, request: &Value) -> Result<(), String> {
         print_success(&response);
         Ok(())
     } else {
-        Err(response.error.unwrap_or_else(|| "неизвестная ошибка".to_string()))
+        Err(response.error.unwrap_or_else(|| "unknown error".to_string()))
     }
 }
 
@@ -111,14 +111,14 @@ fn print_success(response: &CtlResponse) {
         None => return,
     };
 
-    // Если data — массив, это список IP (команда list)
+    // If data is an array, it is the IP list (list command)
     if let Some(entries) = data.as_array() {
         if entries.is_empty() {
-            println!("Нет активных блоков.");
+            println!("No active blocks.");
             return;
         }
 
-        // Ширина столбцов
+        // Column widths
         let ip_width = entries.iter()
             .filter_map(|e| e.get("ip").and_then(|v| v.as_str()))
             .map(|s| s.len())
@@ -128,7 +128,7 @@ fn print_success(response: &CtlResponse) {
 
         println!(
             "{:<ip_width$}  {:<20}  {}",
-            "IP", "Заблокирован", "Причина",
+            "IP", "Blocked At", "Reason",
             ip_width = ip_width
         );
         println!("{}", "─".repeat(ip_width + 2 + 20 + 2 + 40));
@@ -144,7 +144,7 @@ fn print_success(response: &CtlResponse) {
             }
         }
     } else if let Some(msg) = data.as_str() {
-        // Команда unblock возвращает строку
+        // unblock command returns a string
         println!("{}", msg);
     }
 }
@@ -152,7 +152,7 @@ fn print_success(response: &CtlResponse) {
 fn format_timestamp(ts: i64) -> String {
     use std::time::{Duration, UNIX_EPOCH};
     let t = UNIX_EPOCH + Duration::from_secs(ts as u64);
-    // Простое ISO-подобное форматирование без внешних зависимостей
+    // Simple ISO-like formatting without external dependencies
     match std::time::SystemTime::now().duration_since(t) {
         Ok(elapsed) => {
             let secs = elapsed.as_secs();

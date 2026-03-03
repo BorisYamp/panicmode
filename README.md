@@ -4,7 +4,7 @@
 
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/BorisYamp/panicmode)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux-lightgrey.svg)](https://github.com/BorisYamp/panicmode)
-[![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/Rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 
 PanicMode watches your Linux server and takes action the moment something goes wrong — before you even check your phone.
 
@@ -26,7 +26,7 @@ PanicMode watches your Linux server and takes action the moment something goes w
 ### Prerequisites
 
 - Linux (x86\_64 or aarch64)
-- Rust 1.75+ (`curl https://sh.rustup.rs -sSf | sh`)
+- Rust 1.88+ (`curl https://sh.rustup.rs -sSf | sh`)
 
 ### Build & Install
 
@@ -86,6 +86,22 @@ See [QUICKSTART.md](QUICKSTART.md) for detailed setup of each alert channel.
 
 ---
 
+## Try It on Windows (Docker)
+
+The [`docker-win`](https://github.com/BorisYamp/panicmode/tree/docker-win) branch contains a ready-to-run Docker Compose setup with a pre-built test configuration — no Rust toolchain required.
+
+```bash
+git clone -b docker-win https://github.com/BorisYamp/panicmode.git
+cd panicmode
+docker compose up
+```
+
+That's it. PanicMode will start, begin collecting metrics from inside the container, and you will see alerts firing in the console. Everything works out of the box — no configuration needed to verify the system is alive.
+
+> **Note:** On Windows, Docker Desktop with WSL2 backend is required.
+
+---
+
 ## Alert Channels
 
 | Channel | Free | Setup time |
@@ -119,7 +135,7 @@ See [QUICKSTART.md](QUICKSTART.md) for detailed setup of each alert channel.
 
 When an incident fires, PanicMode can:
 
-- **`freeze_processes`** — SIGSTOP the top CPU offenders (whitelists `sshd`, `panicmode`, etc.)
+- **`freeze_top_process`** — SIGSTOP the top CPU offenders (whitelists `sshd`, `panicmode`, etc.)
 - **`block_ip`** — Run your firewall script to drop the attacking IP; blocks are persisted in SQLite and restored after reboot; manage with `panicmode-ctl list` / `panicmode-ctl unblock <IP>`
 - **`snapshot`** — Capture `ps`, `netstat`, `free`, `df`, `uptime` to a timestamped file
 - **`run_script`** — Execute any custom script with incident context in environment variables
@@ -129,7 +145,7 @@ When an incident fires, PanicMode can:
 
 ## Configuration Reference
 
-See [exampels/config.yaml](exampels/config.yaml) for a fully-annotated example.
+See [examples/config.yaml](examples/config.yaml) for a fully-annotated example.
 
 Key sections:
 
@@ -143,7 +159,7 @@ firewall:       # block_ip script paths, whitelist, restore_on_startup
 actions:        # per-action settings (script paths, etc.)
 ```
 
-For process freeze whitelist, create `/etc/panicmode/mass_freeze.yaml` (see [exampels/mass_freeze.yaml](exampels/mass_freeze.yaml)).
+For process freeze whitelist, create `/etc/panicmode/mass_freeze.yaml` (see [examples/mass_freeze.yaml](examples/mass_freeze.yaml)).
 
 ---
 

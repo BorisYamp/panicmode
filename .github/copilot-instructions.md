@@ -11,6 +11,7 @@ PanicMode is a Rust-based application designed for monitoring and alerting on sy
   - **Detector Task**: Analyzes metrics against predefined rules to detect anomalies and triggers alerts.
   - **Alert Task**: Dispatches alerts to various channels (Telegram, Discord, Email, etc.) based on detections from the Detector.
   - **Self-Check Task**: Monitors the health of the PanicMode application itself.
+  - **HTTP API Task**: Optional healthcheck endpoint (`GET /health`). Auxiliary ctl task serves the Unix socket for `panicmode-ctl`.
 
 ## Developer Workflows
 - **Building**: Use `cargo build` to compile the application.
@@ -26,9 +27,9 @@ PanicMode is a Rust-based application designed for monitoring and alerting on sy
 - **Cross-Component Communication**: Metrics are passed from the Monitoring Task to the Detector Task via channels, ensuring real-time processing of system data.
 
 ## Key Files/Directories
-- **`scr/config.rs`**: Configuration management for the application.
-- **`scr/main.rs`**: Entry point for the application, initializes the main process and tasks.
-- **`scr/action/`**: Contains the implementation of various tasks (monitoring, detection, alerting).
+- **`src/config.rs`**: Configuration management for the application.
+- **`src/main.rs`**: Entry point for the application, initializes the main process and tasks.
+- **`src/action/`**: Contains the implementation of protective actions (firewall, process freeze, snapshot, script).
 
 ## Conclusion
 This document serves as a guide for AI coding agents to understand the PanicMode architecture, workflows, and conventions. For further details, refer to the specific source files mentioned above.

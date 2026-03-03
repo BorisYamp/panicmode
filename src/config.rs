@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 
-// ActionType живёт в action-модуле, но реэкспортируем для обратной совместимости:
-// другие модули продолжают делать `use crate::config::ActionType`
+// ActionType lives in the action module, but re-exported here for backward compatibility:
+// other modules continue to use `use crate::config::ActionType`
 pub use crate::action::ActionType;
 
 // ============================================================================
@@ -33,15 +33,15 @@ pub struct Config {
     #[serde(default)]
     pub storage: StorageConfig,
 
-    /// Пороги встроенного детектора аномалий
+    /// Thresholds for the built-in anomaly detector
     #[serde(default)]
     pub anomaly: AnomalyConfig,
 
-    /// Встроенный HTTP healthcheck endpoint
+    /// Built-in HTTP healthcheck endpoint
     #[serde(default)]
     pub http_api: HttpApiConfig,
 
-    /// Настройки блокировки IP фаерволом и CLI-управления
+    /// IP blocking settings (firewall scripts and CLI socket)
     #[serde(default)]
     pub firewall: FirewallConfig,
 }
@@ -111,7 +111,7 @@ pub struct StorageConfig {
     pub log_dir: String,
 
     /// JSON file to persist incident deduplication state across restarts.
-    /// При рестарте загружается — активные инциденты не дедуплицируются повторно.
+    /// Loaded on restart — active incidents are not re-deduplicated.
     #[serde(default = "default_state_file")]
     pub state_file: String,
 }
@@ -144,12 +144,12 @@ fn default_state_file() -> String {
 // Anomaly Detection Config
 // ============================================================================
 
-/// Пороги встроенного детектора аномалий (AnomalyDetector).
+/// Thresholds for the built-in anomaly detector (AnomalyDetector).
 ///
-/// AnomalyDetector работает поверх правил monitors[]: он срабатывает при
-/// резком выбросе метрик даже если явных правил в конфиге нет.
+/// AnomalyDetector runs on top of the monitors[] rules: it fires on sudden
+/// metric spikes even when no explicit rule exists in the config.
 ///
-/// Пример в config.yaml:
+/// Example in config.yaml:
 /// ```yaml
 /// anomaly:
 ///   cpu_spike_threshold: 95.0
@@ -160,30 +160,30 @@ fn default_state_file() -> String {
 /// ```
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AnomalyConfig {
-    /// CPU (%) — порог аномального CPU-спайка
+    /// CPU (%) — threshold for an anomalous CPU spike
     #[serde(default = "default_cpu_spike_threshold")]
     pub cpu_spike_threshold: f32,
 
-    /// RAM (%) — порог аномального потребления памяти (должно быть + heavy swap)
+    /// RAM (%) — threshold for anomalous memory usage (typically combined with heavy swap)
     #[serde(default = "default_memory_spike_threshold")]
     pub memory_spike_threshold: f32,
 
-    /// Активные соединения — порог flood-атаки
+    /// Active connections — threshold for a flood attack
     #[serde(default = "default_connection_spike_threshold")]
     pub connection_spike_threshold: u64,
 
-    /// Минимальное число подозрительных IP для координированной атаки
+    /// Minimum number of suspicious IPs to indicate a coordinated attack
     #[serde(default = "default_suspicious_ip_threshold")]
     pub suspicious_ip_threshold: usize,
 
-    /// Load average 1 min — порог высокой нагрузки (I/O-bound и пр.)
-    /// Рекомендуется: кол-во CPU-ядер × 1.5–2.0
+    /// Load average 1 min — threshold for high load (I/O-bound, etc.)
+    /// Recommended: number of CPU cores × 1.5–2.0
     #[serde(default = "default_high_load_threshold")]
     pub high_load_threshold: f64,
 
-    /// Соединений от одного IP — порог для пометки IP как "подозрительного".
-    /// Используется NetworkMonitor при вычислении top_ips.is_suspicious.
-    /// AnomalyDetector затем смотрит сколько таких IP накопилось (→ suspicious_ip_threshold).
+    /// Connections from a single IP — threshold to mark an IP as "suspicious".
+    /// Used by NetworkMonitor when computing top_ips.is_suspicious.
+    /// AnomalyDetector then checks how many such IPs have accumulated (→ suspicious_ip_threshold).
     #[serde(default = "default_suspicious_connections_per_ip")]
     pub suspicious_connections_per_ip: u64,
 }
@@ -212,24 +212,24 @@ fn default_suspicious_connections_per_ip() -> u64 { 50 }
 // HTTP API Config
 // ============================================================================
 
-/// Встроенный HTTP healthcheck endpoint (опционально).
+/// Built-in HTTP healthcheck endpoint (optional).
 ///
-/// Пример в config.yaml:
+/// Example in config.yaml:
 /// ```yaml
 /// http_api:
 ///   enabled: true
 ///   bind: "127.0.0.1:8765"
 /// ```
 ///
-/// Запрос: GET http://127.0.0.1:8765/health
-/// Ответ:  {"status":"ok","uptime_secs":3600,"version":"0.1.0"}
+/// Request: GET http://127.0.0.1:8765/health
+/// Response: {"status":"ok","uptime_secs":3600}
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HttpApiConfig {
-    /// Включить HTTP API. По умолчанию выключен.
+    /// Enable the HTTP API. Disabled by default.
     #[serde(default)]
     pub enabled: bool,
 
-    /// Адрес для прослушивания. Только localhost — не открывай в интернет!
+    /// Bind address. Keep localhost by default — do not expose to the internet!
     #[serde(default = "default_http_bind")]
     pub bind: String,
 }
@@ -251,9 +251,9 @@ fn default_http_bind() -> String {
 // Firewall Config
 // ============================================================================
 
-/// Настройки блокировки IP-адресов фаерволом.
+/// IP blocking settings via firewall scripts.
 ///
-/// Пример в config.yaml:
+/// Example in config.yaml:
 /// ```yaml
 /// firewall:
 ///   enabled: true
@@ -264,32 +264,32 @@ fn default_http_bind() -> String {
 /// ```
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FirewallConfig {
-    /// Включить блокировку IP. Если false — action block_ip игнорируется.
+    /// Enable IP blocking. If false — the block_ip action is ignored.
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    /// Скрипт для блокировки IP: вызывается как `block_ip.sh <IP>`.
-    /// Переменная окружения PANICMODE_BLOCK_IP_SCRIPT перекрывает это значение.
+    /// Script to block an IP: invoked as `block_ip.sh <IP>`.
+    /// The env variable PANICMODE_BLOCK_IP_SCRIPT overrides this value.
     #[serde(default = "default_block_script")]
     pub block_script: String,
 
-    /// Скрипт для снятия блокировки: вызывается как `unblock_ip.sh <IP>`.
-    /// Переменная окружения PANICMODE_UNBLOCK_IP_SCRIPT перекрывает это значение.
+    /// Script to unblock an IP: invoked as `unblock_ip.sh <IP>`.
+    /// The env variable PANICMODE_UNBLOCK_IP_SCRIPT overrides this value.
     #[serde(default = "default_unblock_script")]
     pub unblock_script: String,
 
-    /// Восстанавливать заблокированные IP из БД при старте демона.
-    /// Необходимо для выживания блоков после перезагрузки сервера.
+    /// Restore blocked IPs from DB on daemon startup.
+    /// Required for blocks to survive server reboots.
     #[serde(default = "default_true")]
     pub restore_on_startup: bool,
 
-    /// Путь к Unix-сокету для CLI-утилиты panicmode-ctl.
+    /// Unix socket path for the panicmode-ctl CLI utility.
     #[serde(default = "default_ctl_socket")]
     pub ctl_socket: String,
 
-    /// IP-адреса и подсети, которые НИКОГДА не будут заблокированы.
-    /// Поддерживаются точные IP ("1.2.3.4") и CIDR ("1.2.3.0/24", "2001:db8::/32").
-    /// RFC1918 и loopback защищены всегда — вне зависимости от этого списка.
+    /// IP addresses and subnets that will NEVER be blocked.
+    /// Supports exact IPs ("1.2.3.4") and CIDR notation ("1.2.3.0/24", "2001:db8::/32").
+    /// RFC1918 and loopback are always protected — regardless of this list.
     #[serde(default)]
     pub whitelist: Vec<String>,
 }
@@ -664,8 +664,8 @@ pub struct EmailConfig {
     pub use_tls: bool,
 }
 
-/// Twilio используется для звонков и SMS через REST API.
-/// Номера телефонов вводятся пользователем в секции alerts.critical[].contacts[].phone
+/// Twilio is used for phone calls and SMS via the REST API.
+/// Phone numbers are specified by the user in the alerts.critical[].contacts[].phone section.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TwilioConfig {
     pub enabled: bool,
@@ -790,7 +790,7 @@ impl Config {
 
 // ============================================================================
 // Humantime serde helpers
-// Поддерживает составные форматы: "1h30m", "5m30s", "500ms", "1d12h"
+// Supports compound formats: "1h30m", "5m30s", "500ms", "1d12h"
 // ============================================================================
 
 mod humantime_serde {
@@ -841,11 +841,11 @@ mod optional_humantime_serde {
     }
 }
 
-/// Парсит строку вида "5s", "10m", "1h", "500ms", "1h30m", "1d12h30m15s".
+/// Parses a string such as "5s", "10m", "1h", "500ms", "1h30m", "1d12h30m15s".
 ///
-/// Поддерживаемые единицы: d (дни), h (часы), m (минуты), s (секунды), ms (мс).
-/// Составные форматы ("1h30m") накапливаются слева направо.
-/// Голое число без суффикса = секунды.
+/// Supported units: d (days), h (hours), m (minutes), s (seconds), ms (milliseconds).
+/// Compound formats ("1h30m") are accumulated left to right.
+/// A bare number without a suffix is treated as seconds.
 pub fn parse_duration(s: &str) -> Result<Duration> {
     let s = s.trim();
     if s.is_empty() {
@@ -858,7 +858,7 @@ pub fn parse_duration(s: &str) -> Result<Duration> {
     let mut parsed_any = false;
 
     while i < bytes.len() {
-        // Парсим число
+        // Parse number
         let num_start = i;
         while i < bytes.len() && bytes[i].is_ascii_digit() {
             i += 1;
@@ -870,12 +870,12 @@ pub fn parse_duration(s: &str) -> Result<Duration> {
         parsed_any = true;
 
         if i >= bytes.len() {
-            // Голое число без суффикса = секунды
+            // Bare number without suffix = seconds
             total_ms = total_ms.saturating_add(num.saturating_mul(1_000));
             break;
         }
 
-        // Парсим единицу (ms должен проверяться раньше m!)
+        // Parse unit (ms must be checked before m!)
         if i + 1 < bytes.len() && bytes[i] == b'm' && bytes[i + 1] == b's' {
             total_ms = total_ms.saturating_add(num);
             i += 2;
@@ -940,7 +940,7 @@ mod tests {
 }
 
 // ============================================================================
-// Mass Freeze Config (отдельный файл: mass_freeze.yaml)
+// Mass Freeze Config (separate file: mass_freeze.yaml)
 // ============================================================================
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -997,13 +997,13 @@ fn default_top_count() -> usize {
 }
 
 impl MassFreezeConfig {
-    /// Загрузить mass_freeze.yaml с fallback на defaults.
+    /// Load mass_freeze.yaml with fallback to defaults.
     ///
-    /// Приоритет:
+    /// Priority:
     /// 1. Env: PANICMODE_MASS_FREEZE_CONFIG
-    /// 2. Рядом с основным конфигом: {config_dir}/mass_freeze.yaml
-    /// 3. Системный: /etc/panicmode/mass_freeze.yaml
-    /// 4. Hardcoded defaults (с warning)
+    /// 2. Next to the main config: {config_dir}/mass_freeze.yaml
+    /// 3. System path: /etc/panicmode/mass_freeze.yaml
+    /// 4. Hardcoded defaults (with a warning)
     pub fn load_from_path_or_default<P: AsRef<Path>>(config_dir: P) -> Result<Self> {
         if let Ok(path) = std::env::var("PANICMODE_MASS_FREEZE_CONFIG") {
             return Self::load(&path);

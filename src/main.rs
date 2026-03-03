@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
     let detector = Arc::new(Detector::new(config.clone(), monitor.clone()));
     let alert_dispatcher = Arc::new(AlertDispatcher::new(config.clone()));
 
-    // Восстанавливаем заблокированные IP после перезагрузки сервера
+    // Restore blocked IPs after server reboot
     if config.firewall.restore_on_startup {
         restore_blocked_ips(&config, &incident_storage).await;
     }

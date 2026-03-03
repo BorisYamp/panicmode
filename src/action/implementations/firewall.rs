@@ -18,7 +18,7 @@ const SCRIPT_TIMEOUT: Duration = Duration::from_secs(10);
 // Whitelist — CIDR matching without extra dependencies
 // ============================================================================
 
-/// Одна запись whitelist: точный IP или подсеть CIDR.
+/// One whitelist entry: exact IP or CIDR subnet.
 #[derive(Debug, Clone)]
 enum WhitelistEntry {
     Exact(IpAddr),
@@ -27,7 +27,7 @@ enum WhitelistEntry {
 }
 
 impl WhitelistEntry {
-    /// Парсит строку вида "1.2.3.4", "1.2.3.0/24", "2001:db8::/32".
+    /// Parses a string such as "1.2.3.4", "1.2.3.0/24", "2001:db8::/32".
     fn parse(s: &str) -> Option<Self> {
         if let Some(slash) = s.find('/') {
             let ip_str = &s[..slash];
@@ -190,7 +190,7 @@ impl Action for FirewallAction {
             return Ok(());
         }
 
-        // Фильтруем whitelist — логируем каждое пропущенное IP
+        // Filter whitelist — log each skipped IP
         let ips: Vec<IpAddr> = raw_ips
             .into_iter()
             .filter(|ip| {
@@ -281,7 +281,7 @@ impl Action for FirewallAction {
             anyhow::bail!("block_ip: all {} script invocation(s) failed", total);
         }
 
-        // Записываем успешно заблокированные IP в БД (для восстановления после ребута)
+        // Persist successfully blocked IPs to DB (for restore after reboot)
         let storage = self.storage.clone();
         let reason_clone = reason.clone();
         tokio::spawn(async move {
@@ -559,8 +559,8 @@ mod tests {
                 WhitelistEntry::parse("5.0.0.0/8").unwrap(),
             ],
         };
-        // 1.2.3.4 — в exact whitelist, 5.6.7.8 — в CIDR 5.0.0.0/8
-        // оба пропускаются → ips пустой → Ok без вызова скрипта
+        // 1.2.3.4 — in exact whitelist, 5.6.7.8 — in CIDR 5.0.0.0/8
+        // both are skipped → ips is empty → Ok without calling the script
         let incident = make_incident_with_details("attack from 1.2.3.4 and 5.6.7.8");
         let ctx = ActionContext::new(&incident);
         action.execute(&ctx).await.unwrap();
@@ -574,9 +574,9 @@ mod tests {
             storage: test_storage(),
             whitelist: vec![WhitelistEntry::parse("1.2.3.4").unwrap()],
         };
-        // 1.2.3.4 — в whitelist (пропускается), 9.9.9.9 — блокируется
+        // 1.2.3.4 — in whitelist (skipped), 9.9.9.9 — will be blocked
         let incident = make_incident_with_details("attack from 1.2.3.4 and 9.9.9.9");
         let ctx = ActionContext::new(&incident);
-        action.execute(&ctx).await.unwrap(); // должен успешно заблокировать 9.9.9.9
+        action.execute(&ctx).await.unwrap(); // should successfully block 9.9.9.9
     }
 }

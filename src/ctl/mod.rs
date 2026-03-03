@@ -1,12 +1,12 @@
 /// Path: PanicMode/src/ctl/mod.rs
 ///
-/// Unix socket сервер для CLI-утилиты panicmode-ctl.
+/// Unix socket server for the panicmode-ctl CLI utility.
 ///
-/// Протокол: newline-delimited JSON.
-/// Запрос:  {"cmd":"list"}\n
-///          {"cmd":"unblock","ip":"1.2.3.4"}\n
-/// Ответ:   {"ok":true,"data":[...]}\n
-///          {"ok":false,"error":"..."}\n
+/// Protocol: newline-delimited JSON.
+/// Request:  {"cmd":"list"}\n
+///           {"cmd":"unblock","ip":"1.2.3.4"}\n
+/// Response: {"ok":true,"data":[...]}\n
+///           {"ok":false,"error":"..."}\n
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -83,12 +83,12 @@ impl CtlServer {
     pub async fn run(&self, cancel: CancellationToken) -> Result<()> {
         let socket_path = &self.config.firewall.ctl_socket;
 
-        // Создаём директорию для сокета если её нет
+        // Create socket directory if it does not exist
         if let Some(parent) = std::path::Path::new(socket_path).parent() {
             let _ = tokio::fs::create_dir_all(parent).await;
         }
 
-        // Удаляем старый сокет если остался после краша
+        // Remove stale socket left from a previous crash
         let _ = tokio::fs::remove_file(socket_path).await;
 
         let listener = UnixListener::bind(socket_path)
@@ -145,7 +145,7 @@ async fn handle_connection(
     let (reader, mut writer) = stream.into_split();
     let mut lines = BufReader::new(reader).lines();
 
-    // Одно соединение = одна команда (keep-alive не нужен)
+    // One connection = one command (no keep-alive needed)
     let response = if let Ok(Ok(Some(line))) = tokio::time::timeout(
         Duration::from_secs(5),
         lines.next_line(),
@@ -198,7 +198,7 @@ async fn handle_unblock(ip: &str, storage: &Arc<IncidentStorage>, unblock_script
         return error_response(format!("invalid IP address: {:?}", ip));
     }
 
-    // Вызываем скрипт разблокировки
+    // Invoke unblock script
     let script_result = tokio::time::timeout(
         Duration::from_secs(10),
         tokio::process::Command::new(unblock_script)
@@ -227,7 +227,7 @@ async fn handle_unblock(ip: &str, storage: &Arc<IncidentStorage>, unblock_script
         ));
     }
 
-    // Помечаем IP как разблокированный в БД
+    // Mark IP as unblocked in DB
     match storage.remove_blocked_ip(ip).await {
         Ok(()) => {
             tracing::info!("ctl: unblocked {}", ip);
@@ -235,7 +235,7 @@ async fn handle_unblock(ip: &str, storage: &Arc<IncidentStorage>, unblock_script
                 .unwrap_or_else(|e| error_response(e.to_string()))
         }
         Err(e) => {
-            // Скрипт сработал, но в БД IP не нашли — предупреждаем, но не считаем ошибкой
+            // Script succeeded but IP was not found in DB — warn but treat as success
             tracing::warn!("ctl: unblocked {} via script but not found in DB: {}", ip, e);
             serde_json::to_string(&CtlResponse::ok(
                 format!("unblocked {} (not in DB: {})", ip, e)

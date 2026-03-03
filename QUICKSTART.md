@@ -188,6 +188,22 @@ Use `examples/basic.yaml` and fill in ALL integrations!
 
 ---
 
+## Running on Windows (Docker)
+
+No Rust toolchain needed. The [`docker-win`](https://github.com/BorisYamp/panicmode/tree/docker-win) branch contains a pre-configured Docker Compose setup with a test build ready to run on Windows.
+
+**Requirements:** Docker Desktop with WSL2 backend.
+
+```bash
+git clone -b docker-win https://github.com/BorisYamp/panicmode.git
+cd panicmode
+docker compose up
+```
+
+PanicMode will start immediately and begin sending test alerts — no configuration required. Use this to verify that your chosen alert channel (Telegram, ntfy, Discord, etc.) is working correctly before deploying to a real Linux server.
+
+---
+
 ## Build & Run
 ```bash
 # Build

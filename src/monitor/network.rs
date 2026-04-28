@@ -4,18 +4,31 @@ use super::{NetworkMetrics, IpConnectionInfo};
 use std::collections::HashMap;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-#[derive(Clone)]
-pub struct NetworkMonitor {
-    // State for tracking changes between collection cycles
+/// Per-tick state shared across clones.
+///
+/// Until bug #21 fix, these fields were plain values on NetworkMonitor and
+/// the struct was `#[derive(Clone)]`. The MonitorEngine cloned the monitor
+/// on every spawn_blocking tick, the clone updated *its own* fields, then
+/// the clone was dropped. The original inside MonitorEngine was never
+/// updated, so connection_rate/byte rates always computed against a stale
+/// "first run" baseline → effectively always 0.
+///
+/// Wrapping in Arc<Mutex<>> means all clones share one underlying state.
+#[derive(Default)]
+struct NetworkState {
     last_connection_count: Option<u64>,
     last_collect_time: Option<Instant>,
     last_bytes_received: Option<u64>,
     last_bytes_sent: Option<u64>,
-
-    // Cache for parsing /proc/net/tcp* (refreshed every cycle)
     connection_cache: Option<(Instant, Vec<ConnectionInfo>)>,
+}
+
+#[derive(Clone)]
+pub struct NetworkMonitor {
+    state: Arc<Mutex<NetworkState>>,
     cache_ttl: std::time::Duration,
 
     /// Connections from a single IP above this value → ip.is_suspicious = true.
@@ -32,20 +45,17 @@ struct ConnectionInfo {
 impl NetworkMonitor {
     pub fn new(suspicious_connections_per_ip: u64) -> Result<Self> {
         Ok(Self {
-            last_connection_count: None,
-            last_collect_time: None,
-            last_bytes_received: None,
-            last_bytes_sent: None,
-            connection_cache: None,
+            state: Arc::new(Mutex::new(NetworkState::default())),
             cache_ttl: std::time::Duration::from_secs(1),
             suspicious_connections_per_ip,
         })
     }
-    
-    pub fn collect(&mut self) -> Result<NetworkMetrics> {
+
+    pub fn collect(&self) -> Result<NetworkMetrics> {
         let now = Instant::now();
-        
-        // Parse connections (with caching)
+
+        // Parse connections (with caching). Both reads and writes of state
+        // happen under one lock, held across short non-IO sections.
         let connections = self.get_connections_cached()?;
 
         // Active connections (state ESTABLISHED = 0x01)
@@ -56,33 +66,31 @@ impl NetworkMonitor {
         // Top IP addresses
         let top_ips = calculate_top_ips(&connections, self.suspicious_connections_per_ip)?;
 
-        // Calculate connection rate
-        let (new_connections, connection_rate) = if let (Some(last_count), Some(last_time)) = 
-            (self.last_connection_count, self.last_collect_time) {
-            
-            let delta_connections = active_connections.saturating_sub(last_count);
-            let delta_time = now.duration_since(last_time).as_secs_f64();
-            
-            let rate = if delta_time > 0.0 {
-                delta_connections as f64 / delta_time
+        let (new_connections, connection_rate) = {
+            let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let result = if let (Some(last_count), Some(last_time)) =
+                (st.last_connection_count, st.last_collect_time)
+            {
+                let delta_connections = active_connections.saturating_sub(last_count);
+                let delta_time = now.duration_since(last_time).as_secs_f64();
+                let rate = if delta_time > 0.0 {
+                    delta_connections as f64 / delta_time
+                } else {
+                    0.0
+                };
+                (delta_connections, rate)
             } else {
-                0.0
+                (0, 0.0)
             };
-            
-            (delta_connections, rate)
-        } else {
-            // First run — no data for rate calculation
-            (0, 0.0)
+            st.last_connection_count = Some(active_connections);
+            st.last_collect_time = Some(now);
+            result
         };
-        
-        // Save for the next iteration
-        self.last_connection_count = Some(active_connections);
-        self.last_collect_time = Some(now);
 
         // Collect bytes received/sent from /proc/net/dev
-        let (bytes_received, bytes_sent, bytes_received_rate, bytes_sent_rate) = 
+        let (_bytes_received, _bytes_sent, bytes_received_rate, bytes_sent_rate) =
             self.collect_network_traffic()?;
-        
+
         Ok(NetworkMetrics {
             new_connections,
             active_connections,
@@ -93,46 +101,48 @@ impl NetworkMonitor {
         })
     }
     
-    /// Returns connections with caching
-    fn get_connections_cached(&mut self) -> Result<Vec<ConnectionInfo>> {
+    /// Returns connections with caching. Locks `state` only briefly to
+    /// inspect/update the cache slot — the actual /proc/net/tcp parsing
+    /// runs OUTSIDE the lock so a slow tick doesn't serialize collectors.
+    fn get_connections_cached(&self) -> Result<Vec<ConnectionInfo>> {
         let now = Instant::now();
-        
-        // Check cache
-        if let Some((cached_at, ref connections)) = self.connection_cache {
-            if now.duration_since(cached_at) < self.cache_ttl {
-                return Ok(connections.clone());
+
+        {
+            let st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some((cached_at, ref connections)) = st.connection_cache {
+                if now.duration_since(cached_at) < self.cache_ttl {
+                    return Ok(connections.clone());
+                }
             }
         }
 
-        // Cache is stale — collect fresh
+        // Cache stale → collect fresh (no lock held during parse)
         let connections = parse_all_connections()?;
 
-        // Update cache
-        self.connection_cache = Some((now, connections.clone()));
-        
+        let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        st.connection_cache = Some((now, connections.clone()));
+
         Ok(connections)
     }
-    
+
     /// Collects traffic statistics from /proc/net/dev
-    fn collect_network_traffic(&mut self) -> Result<(u64, u64, u64, u64)> {
+    fn collect_network_traffic(&self) -> Result<(u64, u64, u64, u64)> {
         let (total_received, total_sent) = parse_network_dev()?;
-        
-        // Calculate rate if previous data is available
-        let (received_rate, sent_rate) = if let (Some(last_rx), Some(last_tx)) = 
-            (self.last_bytes_received, self.last_bytes_sent) {
-            
-            let rx_delta = total_received.saturating_sub(last_rx);
-            let tx_delta = total_sent.saturating_sub(last_tx);
-            
-            (rx_delta, tx_delta)
-        } else {
-            (0, 0)
-        };
-        
-        // Save for the next iteration
-        self.last_bytes_received = Some(total_received);
-        self.last_bytes_sent = Some(total_sent);
-        
+
+        let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+
+        let (received_rate, sent_rate) =
+            if let (Some(last_rx), Some(last_tx)) = (st.last_bytes_received, st.last_bytes_sent) {
+                let rx_delta = total_received.saturating_sub(last_rx);
+                let tx_delta = total_sent.saturating_sub(last_tx);
+                (rx_delta, tx_delta)
+            } else {
+                (0, 0)
+            };
+
+        st.last_bytes_received = Some(total_received);
+        st.last_bytes_sent = Some(total_sent);
+
         Ok((total_received, total_sent, received_rate, sent_rate))
     }
 }
@@ -367,8 +377,8 @@ mod tests {
 
     #[test]
     fn test_network_monitor_basic() {
-        let mut monitor = NetworkMonitor::new(50).unwrap();
-        
+        let monitor = NetworkMonitor::new(50).unwrap();
+
         // First collect
         let metrics1 = monitor.collect().unwrap();
         assert!(metrics1.active_connections >= 0);
@@ -402,14 +412,16 @@ mod tests {
     
     #[test]
     fn test_connection_rate_calculation() {
-        let mut monitor = NetworkMonitor::new(50).unwrap();
-        
-        // Simulate connection change
-        monitor.last_connection_count = Some(10);
-        monitor.last_collect_time = Some(Instant::now() - std::time::Duration::from_secs(1));
+        let monitor = NetworkMonitor::new(50).unwrap();
 
-        // Mock the current state (in production it would come from /proc)
-        // For the test we just verify that rate is calculated
+        // Seed shared state so the next collect computes a real delta
+        // instead of treating it as the first sample.
+        {
+            let mut st = monitor.state.lock().unwrap();
+            st.last_connection_count = Some(10);
+            st.last_collect_time = Some(Instant::now() - std::time::Duration::from_secs(1));
+        }
+
         let metrics = monitor.collect().unwrap();
 
         // Rate should be calculated (may vary depending on the system)
@@ -429,8 +441,8 @@ mod tests {
     
     #[test]
     fn test_network_traffic_rate() {
-        let mut monitor = NetworkMonitor::new(50).unwrap();
-        
+        let monitor = NetworkMonitor::new(50).unwrap();
+
         // First collect — establishes baseline
         let _metrics1 = monitor.collect().unwrap();
 

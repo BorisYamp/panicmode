@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/detector/circuit_breaker.rs
+/// Path: PanicMode/src/detector/circuit_breaker.rs
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant, SystemTime};

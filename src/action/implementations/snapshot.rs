@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/action/implementations/snapshot.rs
+/// Path: PanicMode/src/action/implementations/snapshot.rs
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 

@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/monitor/disk_io.rs
+/// Path: PanicMode/src/monitor/disk_io.rs
 ///
 /// Disk I/O utilization monitor via /proc/diskstats.
 ///

@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/storage.rs
+/// Path: PanicMode/src/storage.rs
 ///
 /// SQLite-backed incident log.
 ///

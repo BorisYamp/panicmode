@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/detector/mod.rs
+/// Path: PanicMode/src/detector/mod.rs
 use anyhow::Result;
 use std::sync::Arc;
 use std::collections::HashMap;

@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/monitor/auth.rs
+/// Path: PanicMode/src/monitor/auth.rs
 use anyhow::Result;
 use super::{AuthMetrics, AuthFailureInfo};
 use std::collections::HashMap;

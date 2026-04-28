@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/monitor/custom_metrics.rs
+/// Path: PanicMode/src/monitor/custom_metrics.rs
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/monitor/cpu.rs
+/// Path: PanicMode/src/monitor/cpu.rs
 use anyhow::Result;
 use super::{CpuMetrics, ProcessInfo};
 use std::thread;

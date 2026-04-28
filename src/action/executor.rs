@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/action/executor.rs
+/// Path: PanicMode/src/action/executor.rs
 use super::r#trait::{Action, ActionContext, ActionType};
 use super::registry::ActionRegistry;
 use super::result::{ActionExecutionResult, ActionFailure};

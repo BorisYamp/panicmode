@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/monitor/memory.rs
+/// Path: PanicMode/src/monitor/memory.rs
 use anyhow::Result;
 use super::MemoryMetrics;
 use std::fs;

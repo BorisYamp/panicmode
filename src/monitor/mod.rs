@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/monitor/mod.rs
+/// Path: PanicMode/src/monitor/mod.rs
 use anyhow::Result;
 use std::sync::Arc;
 use std::time::{SystemTime, Duration, Instant};
@@ -152,7 +152,7 @@ impl MonitorEngine {
             file_watcher: Arc::new(Mutex::new(file_watcher)),
             custom_metrics: Arc::new(CustomMetricsExecutor::new()),
             disk_cache: Arc::new(RwLock::new(None)),
-            disk_cache_ttl: Duration::from_secs(60),
+            disk_cache_ttl: config.performance.disk_cache_ttl,
         })
     }
     

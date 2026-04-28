@@ -22,6 +22,12 @@ Group=root
 # Working directory
 WorkingDirectory=/var/lib/panicmode
 
+# Runtime dir for the ctl Unix socket. systemd creates /run/panicmode at
+# start with the requested mode and tears it down on stop, so a stale
+# socket from a crash never blocks a restart with EADDRINUSE.
+RuntimeDirectory=panicmode
+RuntimeDirectoryMode=0700
+
 # Environment
 Environment=RUST_LOG=panicmode=info
 
@@ -33,12 +39,18 @@ NoNewPrivileges=true
 # Private /tmp
 PrivateTmp=true
 
-# Read-only file system except where we need to write
+# Read-only file system except where we need to write.
+# /run is required because UFW (when used as the firewall script backend)
+# takes a lock at /run/ufw.lock, and iptables uses /run/xtables.lock.
+# Without it, block_ip script calls fail under hardening.
 ReadOnlyPaths=/
-ReadWritePaths=/var/lib/panicmode /var/log/panicmode /etc/panicmode /tmp
+ReadWritePaths=/var/lib/panicmode /var/log/panicmode /etc/panicmode /tmp /run
 
-# Allow network access (alerts via HTTP/SMTP/Telegram etc.)
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Allow network access (alerts via HTTP/SMTP/Telegram etc.).
+# AF_NETLINK is required for iptables/ip6tables, which talk to kernel
+# netfilter via netlink sockets. Without it, block_ip and unblock_ip
+# scripts cannot modify firewall rules from inside the unit.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 
 # Restrict dangerous syscalls
 SystemCallFilter=@system-service @process @network-io @file-system

@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/action/implementations/script.rs
+/// Path: PanicMode/src/action/implementations/script.rs
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
@@ -9,6 +9,34 @@ use tokio::time::{timeout, Duration};
 use crate::action::r#trait::{Action, ActionContext};
 use crate::config::Config;
 
+/// Hard ceiling on each PANIC_* environment variable passed to user scripts.
+///
+/// Two reasons:
+/// 1. Some incident metadata (snapshot dumps, auth-log excerpts) can be huge
+///    — most kernels cap total argv+envp at ~128 KB (MAX_ARG_STRLEN is 32 pages).
+///    Without a cap, an oversized PANIC_DETAILS could fail the exec with E2BIG.
+/// 2. SECURITY NOTE for users writing scripts:
+///    PANIC_DESCRIPTION / PANIC_DETAILS may contain attacker-influenced text
+///    (e.g. usernames extracted from /var/log/auth.log). They are passed
+///    via env, not argv, so they are NOT shell-evaluated by Command::env().
+///    BUT — if your script does `eval "$PANIC_DETAILS"` or pipes the value
+///    into a shell-interpreted context, you reintroduce the injection.
+///    Treat env values as untrusted strings: quote them, never eval them.
+const MAX_ENV_BYTES: usize = 8 * 1024;
+
+fn truncate_env(s: &str) -> std::borrow::Cow<'_, str> {
+    if s.len() <= MAX_ENV_BYTES {
+        std::borrow::Cow::Borrowed(s)
+    } else {
+        // Truncate at a char boundary
+        let mut end = MAX_ENV_BYTES;
+        while !s.is_char_boundary(end) && end > 0 {
+            end -= 1;
+        }
+        std::borrow::Cow::Owned(format!("{}...[truncated]", &s[..end]))
+    }
+}
+
 /// Runs a user-supplied script when an incident fires.
 ///
 /// Incident data is passed via environment variables:
@@ -18,6 +46,9 @@ use crate::config::Config;
 /// - PANIC_DETAILS
 /// - PANIC_THRESHOLD
 /// - PANIC_CURRENT_VALUE
+///
+/// Each variable is truncated to MAX_ENV_BYTES. See the constant for the
+/// security caveat: env values may be attacker-influenced — never eval them.
 pub struct ScriptAction {
     config: Arc<Config>,
 }
@@ -54,13 +85,15 @@ impl Action for ScriptAction {
 
         tracing::info!("🔧 Running script: {}", script_path);
 
+        // Truncate untrusted/large fields (description, details) to prevent
+        // E2BIG on exec. Threshold/current_value are floats — bounded.
         let result = timeout(
             Duration::from_secs(60),
             Command::new(&script_path)
-                .env("PANIC_INCIDENT_NAME", &incident.name)
+                .env("PANIC_INCIDENT_NAME", truncate_env(&incident.name).as_ref())
                 .env("PANIC_SEVERITY", format!("{:?}", incident.severity))
-                .env("PANIC_DESCRIPTION", &incident.description)
-                .env("PANIC_DETAILS", &incident.metadata.details)
+                .env("PANIC_DESCRIPTION", truncate_env(&incident.description).as_ref())
+                .env("PANIC_DETAILS", truncate_env(&incident.metadata.details).as_ref())
                 .env(
                     "PANIC_THRESHOLD",
                     incident.metadata.threshold.to_string(),

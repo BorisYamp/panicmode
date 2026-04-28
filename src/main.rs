@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/main.rs
+/// Path: PanicMode/src/main.rs
 use anyhow::Result;
 use tracing::{info, error, warn};
 use std::sync::Arc;
@@ -37,13 +37,43 @@ const MAX_TASK_FAILURES: usize = 3;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Argument parsing: support `panicmode [--validate|--check] [config.yaml]`.
+    // --validate / --check parse + validate the config and exit (non-zero on
+    // failure) — useful in `systemctl restart` workflows so operators can
+    // verify config before bouncing the daemon.
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.iter().any(|a| a == "-h" || a == "--help") {
+        eprintln!(
+            "panicmode — server monitoring & incident response\n\n\
+             Usage:\n  \
+               panicmode [PATH]                Run daemon (PATH defaults to /etc/panicmode/config.yaml)\n  \
+               panicmode --validate [PATH]     Parse config and exit (0 = OK, 1 = error)\n  \
+               panicmode --help                This message\n\n\
+             Examples:\n  \
+               panicmode --validate /etc/panicmode/config.yaml\n  \
+               sudo systemctl restart panicmode\n"
+        );
+        return Ok(());
+    }
+
+    let validate_only = args.iter().any(|a| a == "--validate" || a == "--check");
+
     // Config must be loaded first — we need log/storage paths before tracing init.
-    let config_path = std::env::args()
-        .nth(1)
+    let config_path = args
+        .iter()
+        .skip(1)
+        .find(|a| !a.starts_with("--"))
+        .cloned()
         .unwrap_or_else(|| "/etc/panicmode/config.yaml".to_string());
 
     let config = Config::load(&config_path)?;
     config.validate()?;
+
+    if validate_only {
+        println!("OK: {} parsed and validated", config_path);
+        return Ok(());
+    }
 
     // Initialize logging: stdout + daily rolling file.
     let _ = std::fs::create_dir_all(&config.storage.log_dir);
@@ -651,6 +681,15 @@ async fn run_alert_task(
 // ============================================================================
 // Self-Check Task
 // ============================================================================
+//
+// Watches PanicMode's own health (CPU/memory/FDs/threads) and alerts on
+// regressions. Each condition has its own cooldown so a persistent state
+// doesn't generate one alert every check_interval — without it, ~12
+// alerts/minute drown the operator.
+//
+// All thresholds come from config.performance — edit /etc/panicmode/config.yaml
+// and `systemctl restart panicmode` (no rebuild needed).
+
 async fn run_self_check_task(
     config: Arc<Config>,
     cancel: CancellationToken,
@@ -660,6 +699,29 @@ async fn run_self_check_task(
 
     let pid = std::process::id();
     let mut baseline_memory: Option<u64> = None;
+
+    let cooldown = config.performance.self_alert_cooldown;
+    let fd_threshold = config.performance.self_fd_threshold;
+    let thread_threshold = config.performance.self_thread_threshold;
+
+    // Per-condition cooldown: alert at most once per cooldown for the same
+    // kind of issue. Without this, a persistent state emits an alert every
+    // tick, drowning the operator in duplicate Telegrams.
+    let mut last_alert: std::collections::HashMap<&'static str, std::time::Instant> =
+        std::collections::HashMap::new();
+
+    let should_alert = |key: &'static str,
+                        last_alert: &mut std::collections::HashMap<&'static str, std::time::Instant>|
+     -> bool {
+        let now = std::time::Instant::now();
+        match last_alert.get(key) {
+            Some(t) if now.duration_since(*t) < cooldown => false,
+            _ => {
+                last_alert.insert(key, now);
+                true
+            }
+        }
+    };
 
     loop {
         tokio::select! {
@@ -680,9 +742,10 @@ async fn run_self_check_task(
                         }
 
                         // CPU limit
-                        if health.cpu_percent > config.performance.cpu_limit {
-                            warn!("Self CPU: {:.1}%", health.cpu_percent);
-                            // try_send instead of send — do NOT block!
+                        if health.cpu_percent > config.performance.cpu_limit
+                            && should_alert("self_cpu", &mut last_alert)
+                        {
+                            warn!("Self CPU: {:.1}% (cooldown: {}s)", health.cpu_percent, cooldown.as_secs());
                             send_alert_with_fallback(
                                 &alert_tx,
                                 AlertMessage::warning(format!("PanicMode CPU high: {:.1}%", health.cpu_percent)),
@@ -690,19 +753,21 @@ async fn run_self_check_task(
                         }
 
                         // Memory limit
-                        if health.memory_mb > config.performance.memory_limit_mb {
-                            warn!("Self memory: {}MB", health.memory_mb);
+                        if health.memory_mb > config.performance.memory_limit_mb
+                            && should_alert("self_memory", &mut last_alert)
+                        {
+                            warn!("Self memory: {}MB (cooldown: {}s)", health.memory_mb, cooldown.as_secs());
                             send_alert_with_fallback(
                                 &alert_tx,
                                 AlertMessage::warning(format!("PanicMode memory high: {}MB", health.memory_mb)),
                             ).await;
                         }
 
-                        // Memory growth
+                        // Memory growth (leak detector — uses baseline, not absolute)
                         if let Some(baseline) = baseline_memory {
                             let growth = health.memory_mb as f64 / baseline as f64;
-                            if growth > 2.0 {
-                                warn!("Memory leak: {}x growth", growth);
+                            if growth > 2.0 && should_alert("self_mem_growth", &mut last_alert) {
+                                warn!("Memory leak: {}x growth (cooldown: {}s)", growth, cooldown.as_secs());
                                 send_alert_with_fallback(
                                     &alert_tx,
                                     AlertMessage::critical(format!("Memory leak: {:.1}x", growth)),
@@ -710,21 +775,25 @@ async fn run_self_check_task(
                             }
                         }
 
-                        // FD leak
-                        if health.fd_count > 100 {
-                            warn!("FD count: {}", health.fd_count);
+                        // FD count above threshold (config.performance.self_fd_threshold)
+                        if health.fd_count > fd_threshold
+                            && should_alert("self_fd", &mut last_alert)
+                        {
+                            warn!("FD count high: {} (cooldown: {}s)", health.fd_count, cooldown.as_secs());
                             send_alert_with_fallback(
                                 &alert_tx,
-                                AlertMessage::warning(format!("FD leak: {}", health.fd_count)),
+                                AlertMessage::warning(format!("PanicMode FD count high: {}", health.fd_count)),
                             ).await;
                         }
 
-                        // Thread leak
-                        if health.thread_count > 20 {
-                            warn!("Thread count: {}", health.thread_count);
+                        // Thread count above threshold (config.performance.self_thread_threshold)
+                        if health.thread_count > thread_threshold
+                            && should_alert("self_threads", &mut last_alert)
+                        {
+                            warn!("Thread count high: {} (cooldown: {}s)", health.thread_count, cooldown.as_secs());
                             send_alert_with_fallback(
                                 &alert_tx,
-                                AlertMessage::warning(format!("Thread leak: {}", health.thread_count)),
+                                AlertMessage::warning(format!("PanicMode thread count high: {}", health.thread_count)),
                             ).await;
                         }
                     }
@@ -831,6 +900,12 @@ fn parse_proc_status_field(status: &str, field: &str) -> Option<u64> {
 // ============================================================================
 // Restore blocked IPs after reboot
 // ============================================================================
+//
+// Failures here are dangerous: rows remain in SQLite as "blocked", but the
+// firewall rule was never re-applied — `panicmode-ctl list` shows a block,
+// the attacker is back in. We track and ERROR-log failures so they're
+// visible in journalctl, and pre-flight the block script so the common
+// case (script renamed/missing/non-exec) is caught before we even iterate.
 async fn restore_blocked_ips(config: &config::Config, storage: &storage::IncidentStorage) {
     let block_script = std::env::var("PANICMODE_BLOCK_IP_SCRIPT")
         .unwrap_or_else(|_| config.firewall.block_script.clone());
@@ -838,7 +913,8 @@ async fn restore_blocked_ips(config: &config::Config, storage: &storage::Inciden
     let ips = match storage.get_active_blocked_ips().await {
         Ok(list) => list,
         Err(e) => {
-            warn!("restore_blocked_ips: cannot read DB: {}", e);
+            error!("restore_blocked_ips: cannot read DB ({}). \
+                Stored blocks were NOT re-applied to firewall.", e);
             return;
         }
     };
@@ -848,7 +924,24 @@ async fn restore_blocked_ips(config: &config::Config, storage: &storage::Inciden
         return;
     }
 
+    // Pre-flight: catch missing/non-exec block script before iterating.
+    let script_path = std::path::Path::new(&block_script);
+    if !script_path.exists() {
+        error!(
+            "restore_blocked_ips: block script {:?} does NOT exist. \
+            {} stored block(s) were NOT re-applied — attackers may have regained access. \
+            Fix the script path in config.firewall.block_script and restart.",
+            block_script,
+            ips.len(),
+        );
+        return;
+    }
+
     info!("restore_blocked_ips: restoring {} block(s) via {}", ips.len(), block_script);
+
+    let total = ips.len();
+    let mut ok = 0usize;
+    let mut failed: Vec<(String, String)> = Vec::new();
 
     for entry in ips {
         let script = block_script.clone();
@@ -861,18 +954,40 @@ async fn restore_blocked_ips(config: &config::Config, storage: &storage::Inciden
 
         match result {
             Ok(Ok(status)) if status.success() => {
+                ok += 1;
                 info!("restore_blocked_ips: restored block for {}", ip);
             }
             Ok(Ok(status)) => {
-                warn!("restore_blocked_ips: script exited {} for {}", status, ip);
+                let reason = format!("script exit {}", status);
+                warn!("restore_blocked_ips: {} for {}", reason, ip);
+                failed.push((ip, reason));
             }
             Ok(Err(e)) => {
-                warn!("restore_blocked_ips: failed to run script for {}: {}", ip, e);
+                let reason = format!("spawn error: {}", e);
+                warn!("restore_blocked_ips: {} for {}", reason, ip);
+                failed.push((ip, reason));
             }
             Err(_) => {
-                warn!("restore_blocked_ips: script timed out for {}", ip);
+                let reason = "script timed out (>10s)".to_string();
+                warn!("restore_blocked_ips: {} for {}", reason, ip);
+                failed.push((ip, reason));
             }
         }
+    }
+
+    if failed.is_empty() {
+        info!("restore_blocked_ips: {}/{} block(s) restored successfully", ok, total);
+    } else {
+        // ERROR (not warn) so it's visible in journalctl --priority=err
+        // and triggers any external monitoring tied to error-level events.
+        error!(
+            "restore_blocked_ips: {}/{} block(s) FAILED to restore. \
+            DB still claims they are blocked but the firewall rule is missing. \
+            Failed IPs and reasons: {:?}",
+            failed.len(),
+            total,
+            failed,
+        );
     }
 }
 

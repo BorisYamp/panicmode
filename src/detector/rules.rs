@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/detector/rules.rs
+/// Path: PanicMode/src/detector/rules.rs
 use anyhow::Result;
 use std::sync::Arc;
 use std::cmp::Ordering;
@@ -147,12 +147,30 @@ impl RuleEvaluator {
                     .collect::<Vec<_>>()
                     .join(", "),
             ),
-            MonitorType::AuthFailures => format!(
-                "Auth failures: {}, from {} IP(s), successful logins: {}",
-                metrics.auth.failed_attempts,
-                metrics.auth.failures_by_ip.len(),
-                metrics.auth.successful_logins,
-            ),
+            MonitorType::AuthFailures => {
+                // Deduplicate by IP (failures_by_ip is keyed by user@ip, so the
+                // same source IP with different usernames produces multiple entries).
+                // The block_ip action parses concrete IPs out of this string —
+                // without them it has nothing to block.
+                use std::collections::BTreeMap;
+                let mut by_ip: BTreeMap<&str, u64> = BTreeMap::new();
+                for entry in &metrics.auth.failures_by_ip {
+                    *by_ip.entry(entry.ip.as_str()).or_insert(0) += entry.attempt_count;
+                }
+                let mut sorted: Vec<_> = by_ip.iter().collect();
+                sorted.sort_by(|a, b| b.1.cmp(a.1));
+                let top_str = sorted.iter().take(5)
+                    .map(|(ip, count)| format!("{}({})", ip, count))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "Auth failures: {}, from {} unique IP(s), successful logins: {}, top: [{}]",
+                    metrics.auth.failed_attempts,
+                    by_ip.len(),
+                    metrics.auth.successful_logins,
+                    top_str,
+                )
+            },
             MonitorType::ProcessCount => format!(
                 "Top processes tracked: {}",
                 metrics.cpu.top_processes.len(),

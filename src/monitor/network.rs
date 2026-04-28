@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/monitor/network.rs
+/// Path: PanicMode/src/monitor/network.rs
 use anyhow::Result;
 use super::{NetworkMetrics, IpConnectionInfo};
 use std::collections::HashMap;

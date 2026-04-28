@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/action/trait.rs
+/// Path: PanicMode/src/action/trait.rs
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::Deserialize;

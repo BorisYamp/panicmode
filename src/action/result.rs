@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/action/result.rs
+/// Path: PanicMode/src/action/result.rs
 use super::r#trait::ActionType;
 
 /// Result of executing a set of actions for an incident.

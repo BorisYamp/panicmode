@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/action/builder.rs
+/// Path: PanicMode/src/action/builder.rs
 use std::sync::Arc;
 use std::time::Duration;
 

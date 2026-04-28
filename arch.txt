@@ -323,7 +323,7 @@ src/action/
 
     Repository layout:
 panicmode/
-├── exampels/
+├── examples/
 │   ├── config.yaml              # Full annotated config example
 │   ├── mass_freeze.yaml         # Mass freeze config example
 │   └── minimal.yaml

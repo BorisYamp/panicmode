@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/action/implementations/firewall.rs
+/// Path: PanicMode/src/action/implementations/firewall.rs
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;

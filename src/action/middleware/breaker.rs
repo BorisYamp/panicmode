@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/action/middleware/breaker.rs
+/// Path: PanicMode/src/action/middleware/breaker.rs
 use std::sync::Arc;
 
 use anyhow::Result;

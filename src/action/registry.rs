@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/action/registry.rs
+/// Path: PanicMode/src/action/registry.rs
 use std::collections::HashMap;
 use std::sync::Arc;
 

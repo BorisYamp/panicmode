@@ -118,12 +118,26 @@ impl IncidentState {
                 .with_context(|| format!("Failed to create dir {}", parent.display()))?;
         }
 
-        // Atomic write: write to .tmp, then rename
-        let tmp_path = format!("{}.tmp", self.state_file);
+        // Atomic write: write to a UNIQUE .tmp, then rename. The unique
+        // suffix (pid+nanos) prevents concurrent save() calls from racing
+        // on the same .tmp file — when multiple incidents fire within the
+        // same millisecond, two saves would otherwise both write to .tmp
+        // and only one rename would find a file to move.
+        let unique_suffix = format!(
+            "{}.{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0),
+        );
+        let tmp_path = format!("{}.tmp.{}", self.state_file, unique_suffix);
         tokio::fs::write(&tmp_path, &json)
             .await
             .with_context(|| format!("Failed to write {tmp_path}"))?;
 
+        // rename() is atomic on POSIX — last writer wins. Each save() ends
+        // with a self-consistent state.json snapshot, even under contention.
         tokio::fs::rename(&tmp_path, &self.state_file)
             .await
             .with_context(|| format!("Failed to rename {tmp_path} -> {}", self.state_file))?;

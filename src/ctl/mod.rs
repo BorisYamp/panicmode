@@ -83,18 +83,36 @@ impl CtlServer {
     pub async fn run(&self, cancel: CancellationToken) -> Result<()> {
         let socket_path = &self.config.firewall.ctl_socket;
 
-        // Create socket directory if it does not exist
+        // Create socket directory if it does not exist, locked down to owner.
         if let Some(parent) = std::path::Path::new(socket_path).parent() {
             let _ = tokio::fs::create_dir_all(parent).await;
+            // Tighten parent so non-root users can't traverse to the socket file.
+            let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
         }
 
         // Remove stale socket left from a previous crash
         let _ = tokio::fs::remove_file(socket_path).await;
 
-        let listener = UnixListener::bind(socket_path)
+        // CRITICAL: bind() creates the socket file using the process umask, which
+        // typically yields 0o755 (world-readable/writable for sockets on most kernels).
+        // A local attacker can connect to the socket in the window between bind()
+        // and set_permissions() and issue ctl commands (e.g. unblock arbitrary IPs).
+        // Force a restrictive umask around bind() so the socket is created 0o600
+        // atomically; set_permissions afterwards is defense-in-depth.
+        //
+        // umask is process-global; we hold it for ~microseconds. Other threads doing
+        // file ops in this window would also be affected — acceptable for startup.
+        let old_umask = unsafe { libc::umask(0o077) };
+
+        let bind_result = UnixListener::bind(socket_path);
+
+        unsafe { libc::umask(old_umask) };
+
+        let listener = bind_result
             .map_err(|e| anyhow::anyhow!("Cannot bind ctl socket {}: {}", socket_path, e))?;
 
-        // Restrict socket to root/owner only — prevent local users from running ctl commands.
+        // Belt-and-suspenders: explicitly set 0o600 in case umask was bypassed
+        // (some kernels/filesystems may apply different defaults to AF_UNIX sockets).
         std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(0o600))
             .map_err(|e| anyhow::anyhow!("Cannot set permissions on ctl socket {}: {}", socket_path, e))?;
 

@@ -1,4 +1,4 @@
-/// Path: PanicMode/scr/alert/mod.rs
+/// Path: PanicMode/src/alert/mod.rs
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -274,10 +274,14 @@ impl AlertDispatcher {
             cfg.bot_token
         );
 
+        // Telegram silently rejects messages > 4096 UTF-16 code units (HTTP 400).
+        // Truncate before sending so a long incident dump still reaches the user.
+        let text = truncate_for_telegram(text);
+
         // Plain text — no parse_mode, no escaping needed
         let body = serde_json::json!({
             "chat_id": cfg.chat_id,
-            "text": text,
+            "text": text.as_ref(),
         });
 
         let resp = client.post(&url).json(&body).send().await?;
@@ -605,6 +609,43 @@ fn escape_xml(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&apos;")
+}
+
+/// Telegram's hard limit on `text` parameter for sendMessage:
+/// 4096 UTF-16 code units (not bytes, not chars). Messages above this
+/// are rejected with HTTP 400 and silently lost.
+const TELEGRAM_TEXT_LIMIT_UTF16: usize = 4096;
+const TELEGRAM_TRUNC_MARKER: &str = "\n…[truncated]";
+
+/// Truncate `text` so it fits within Telegram's 4096-UTF-16-code-unit limit.
+/// Returns the original on the fast path; only allocates when truncating.
+/// Counts UTF-16 units the same way Telegram does, so emoji and supplementary-
+/// plane characters are accounted for correctly.
+fn truncate_for_telegram(text: &str) -> std::borrow::Cow<'_, str> {
+    let total_units: usize = text.chars().map(|c| c.len_utf16()).sum();
+    if total_units <= TELEGRAM_TEXT_LIMIT_UTF16 {
+        return std::borrow::Cow::Borrowed(text);
+    }
+
+    let marker_units: usize = TELEGRAM_TRUNC_MARKER.chars().map(|c| c.len_utf16()).sum();
+    let budget = TELEGRAM_TEXT_LIMIT_UTF16.saturating_sub(marker_units);
+
+    let mut acc_units = 0usize;
+    let mut byte_end = 0usize;
+    for (i, c) in text.char_indices() {
+        let u = c.len_utf16();
+        if acc_units + u > budget {
+            byte_end = i;
+            break;
+        }
+        acc_units += u;
+        byte_end = i + c.len_utf8();
+    }
+
+    let mut out = String::with_capacity(byte_end + TELEGRAM_TRUNC_MARKER.len());
+    out.push_str(&text[..byte_end]);
+    out.push_str(TELEGRAM_TRUNC_MARKER);
+    std::borrow::Cow::Owned(out)
 }
 
 #[cfg(test)]

@@ -131,6 +131,27 @@ async fn main() -> Result<()> {
 
     // Initialize components (Arc for MonitorEngine!)
     let monitor = Arc::new(MonitorEngine::new(config.clone())?);
+
+    // Bug #23: start inotify watches for any file_monitor rules in config.
+    // Until this fix the watcher was created in MonitorEngine::new() but
+    // start_file_monitoring() was never called, so file_monitor incidents
+    // could never fire — the feature looked configurable but was a no-op.
+    {
+        use config::MonitorType;
+        let watch_paths: Vec<String> = config
+            .monitors
+            .iter()
+            .filter(|m| matches!(m.monitor_type, MonitorType::FileMonitor) && m.enabled)
+            .flat_map(|m| m.paths.iter().cloned())
+            .collect();
+        if !watch_paths.is_empty() {
+            info!("Starting file_monitor inotify watches for {} path(s)", watch_paths.len());
+            if let Err(e) = monitor.start_file_monitoring(watch_paths).await {
+                warn!("Failed to start file watcher(s): {} — file_monitor rules will not fire", e);
+            }
+        }
+    }
+
     let detector = Arc::new(Detector::new(config.clone(), monitor.clone()));
     let alert_dispatcher = Arc::new(AlertDispatcher::new(config.clone()));
 

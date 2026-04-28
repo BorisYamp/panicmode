@@ -135,7 +135,21 @@ impl ActionExecutorBuilder {
             bail!("No actions registered — system cannot handle any incidents");
         }
 
-        // Degradable: warn about partial action coverage
+        // Degradable: warn about partial action coverage.
+        //
+        // Bug #10: AlertCritical / AlertWarning / AlertInfo are NOT
+        // ActionExecutor actions — they're routed through AlertDispatcher
+        // via the alert_tx channel. This validator iterates the
+        // ActionExecutor registry, so naively checking every action in
+        // monitor.actions against it produced a noisy "missing actions
+        // [AlertCritical]" warning at every startup, despite alerts
+        // working fine. Filter alert types out of the missing set: they
+        // are validated separately via the alerts/integrations config.
+        let is_dispatcher_action = |at: &crate::action::ActionType| -> bool {
+            use crate::action::ActionType::*;
+            matches!(at, AlertCritical | AlertWarning | AlertInfo)
+        };
+
         for monitor in &self.config.monitors {
             if !monitor.enabled {
                 continue;
@@ -144,7 +158,7 @@ impl ActionExecutorBuilder {
             let missing: Vec<_> = monitor
                 .actions
                 .iter()
-                .filter(|at| self.registry.resolve(at).is_none())
+                .filter(|at| !is_dispatcher_action(at) && self.registry.resolve(at).is_none())
                 .collect();
 
             if !missing.is_empty() {

@@ -195,8 +195,8 @@ impl MonitorEngine {
     pub async fn collect_metrics(&self) -> Result<Metrics> {
         let cpu_monitor = self.cpu_monitor.clone();
         let mut memory_monitor = self.memory_monitor.clone();
-        let mut network_monitor = self.network_monitor.clone();
-        let mut auth_monitor = self.auth_monitor.clone();
+        let network_monitor = self.network_monitor.clone();
+        let auth_monitor = self.auth_monitor.clone();
         let disk_io_monitor = self.disk_io_monitor.clone();
 
         // Disk is cached (in-memory RwLock) — collect before join! to avoid mixed-type inference issues
@@ -335,6 +335,10 @@ mod tests {
                 cpu_limit: 5.0,
                 memory_limit_mb: 50,
                 check_interval: Duration::from_secs(5),
+                self_fd_threshold: 1000,
+                self_thread_threshold: 200,
+                self_alert_cooldown: Duration::from_secs(300),
+                disk_cache_ttl: Duration::from_secs(5),
             },
             monitors: vec![],
             actions: HashMap::new(),

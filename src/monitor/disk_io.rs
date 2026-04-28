@@ -8,7 +8,7 @@
 /// - Clamps to [0.0, 100.0].
 /// - Filters loop/ram/zram/dm devices to reduce noise.
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
@@ -61,14 +61,24 @@ struct DeviceSample {
 // DiskIoMonitor
 // ============================================================================
 
+/// Tracks per-device baseline samples shared across all clones.
+///
+/// History: until bug #20 fix, this was `Mutex<HashMap<...>>` and the
+/// monitor manually implemented Clone, which copied the HashMap by value.
+/// Result: every spawn_blocking tick got a fresh clone with a snapshot of
+/// state, computed its delta, then dropped — the original HashMap inside
+/// MonitorEngine never got updated. Every tick saw 0% util because every
+/// tick was effectively a "first sample". Wrapping in Arc<Mutex<>> makes
+/// all clones share the same underlying HashMap.
+#[derive(Clone)]
 pub struct DiskIoMonitor {
-    prev: Mutex<HashMap<String, DeviceSample>>,
+    prev: Arc<Mutex<HashMap<String, DeviceSample>>>,
 }
 
 impl DiskIoMonitor {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            prev: Mutex::new(HashMap::new()),
+            prev: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -154,18 +164,6 @@ impl DiskIoMonitor {
     }
 }
 
-impl Clone for DiskIoMonitor {
-    fn clone(&self) -> Self {
-        let prev_copy = self
-            .prev
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        Self {
-            prev: Mutex::new(prev_copy),
-        }
-    }
-}
 
 // ============================================================================
 // /proc/diskstats parser

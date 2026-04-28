@@ -16,6 +16,17 @@ use serde_json::{json, Value};
 const DEFAULT_SOCKET: &str = "/run/panicmode/ctl.sock";
 
 fn main() {
+    // Bug #25: when panicmode-ctl is piped to a short consumer like
+    // `head -5`, the consumer closes its stdin after 5 lines and the
+    // next println! returns EPIPE — Rust's default stdio handler then
+    // panics with "Broken pipe (os error 32)". Restoring the default
+    // SIGPIPE handler (which terminates the process silently with
+    // exit code 141) makes the CLI behave like every other Unix tool.
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {

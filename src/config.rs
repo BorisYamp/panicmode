@@ -53,6 +53,10 @@ impl Default for Config {
                 cpu_limit: 5.0,
                 memory_limit_mb: 50,
                 check_interval: Duration::from_secs(5),
+                self_fd_threshold: default_self_fd_threshold(),
+                self_thread_threshold: default_self_thread_threshold(),
+                self_alert_cooldown: default_self_alert_cooldown(),
+                disk_cache_ttl: default_disk_cache_ttl(),
             },
             monitors: vec![],
             actions: HashMap::new(),
@@ -82,6 +86,11 @@ impl Default for Config {
 // ============================================================================
 // Performance Config
 // ============================================================================
+//
+// Tunables for PanicMode itself — limits on its own resource usage and the
+// thresholds the self-check task uses to alert about leaks/regressions.
+// All fields after the first three have serde defaults, so existing configs
+// stay compatible — drop new keys in only when you want to override.
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PerformanceConfig {
@@ -90,7 +99,40 @@ pub struct PerformanceConfig {
 
     #[serde(with = "humantime_serde")]
     pub check_interval: Duration,
+
+    /// Alert when PanicMode's own open file-descriptor count exceeds this.
+    /// Default 1000 — modern reqwest+tokio+tracing easily holds 100+ at
+    /// steady state, so a low threshold produces false-positive "leak" alerts.
+    #[serde(default = "default_self_fd_threshold")]
+    pub self_fd_threshold: usize,
+
+    /// Alert when PanicMode's own thread count exceeds this.
+    /// Default 200 — tokio's multi-threaded runtime owns ~num_cpus*2 worker
+    /// threads plus user-spawned tasks; 20 was wildly low.
+    #[serde(default = "default_self_thread_threshold")]
+    pub self_thread_threshold: usize,
+
+    /// Minimum interval between repeat alerts of the SAME self-check
+    /// condition (CPU high, memory high, FD high, etc).
+    /// Without this, a persistent state emits one alert per check_interval
+    /// (~12/min) — drowning the operator. Default 5 min.
+    #[serde(default = "default_self_alert_cooldown", with = "humantime_serde")]
+    pub self_alert_cooldown: Duration,
+
+    /// How long to cache disk usage metrics. Reading mounts is mildly
+    /// expensive (sysinfo parses /proc/mounts and stats each mount), so a
+    /// short cache amortizes cost across detector ticks.
+    /// Default 5 s = check_interval, so a runaway log file is caught the
+    /// next tick. Was 60s historically — bug #11, way too long for a
+    /// monitoring tool.
+    #[serde(default = "default_disk_cache_ttl", with = "humantime_serde")]
+    pub disk_cache_ttl: Duration,
 }
+
+fn default_self_fd_threshold() -> usize { 1000 }
+fn default_self_thread_threshold() -> usize { 200 }
+fn default_self_alert_cooldown() -> Duration { Duration::from_secs(300) }
+fn default_disk_cache_ttl() -> Duration { Duration::from_secs(5) }
 
 // ============================================================================
 // Storage Config

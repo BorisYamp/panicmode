@@ -216,7 +216,15 @@ impl AlertDispatcher {
                 i.telegram.as_ref().map(|c| c.enabled).unwrap_or(false)
             }
             ChannelType::Discord => {
-                i.discord.as_ref().map(|c| c.enabled).unwrap_or(false)
+                // Bug #27: Discord can be configured at TWO places —
+                // integrations.discord (with enabled flag) AND/OR
+                // channel.webhook_url at the alerts list level. Validation
+                // requires channel.webhook_url, but is_integration_enabled
+                // used to ONLY check integrations.discord.enabled, which
+                // meant a config with just channel.webhook_url silently
+                // dropped every Discord alert. Accept either.
+                let by_integration = i.discord.as_ref().map(|c| c.enabled).unwrap_or(false);
+                by_integration || channel.webhook_url.is_some()
             }
             ChannelType::Ntfy => {
                 i.ntfy.as_ref().map(|c| c.enabled).unwrap_or(false)
@@ -241,7 +249,7 @@ impl AlertDispatcher {
         let client = Self::build_client(channel.timeout);
         match &channel.channel {
             ChannelType::Telegram => self.send_telegram(&client, text, integrations).await,
-            ChannelType::Discord => self.send_discord(&client, text, integrations).await,
+            ChannelType::Discord => self.send_discord(&client, channel, text, integrations).await,
             ChannelType::Ntfy => self.send_ntfy(&client, text, integrations).await,
             ChannelType::Webhook => self.send_webhook(&client, channel, text).await,
             ChannelType::Email => self.send_email(text, integrations).await,
@@ -299,23 +307,40 @@ impl AlertDispatcher {
     // Discord
     // -------------------------------------------------------------------------
 
-    async fn send_discord(&self, client: &Client, text: &str, integrations: &IntegrationsConfig) -> Result<()> {
-        let cfg = integrations
-            .discord
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Discord not configured"))?;
-
-        if !cfg.enabled {
-            return Ok(());
+    async fn send_discord(
+        &self,
+        client: &Client,
+        channel: &AlertChannel,
+        text: &str,
+        integrations: &IntegrationsConfig,
+    ) -> Result<()> {
+        // Bug #27: pick a webhook URL from either source. Prefer channel-
+        // level (matches the example config and Discord's own UI which
+        // produces a per-channel webhook URL); fall back to the
+        // integrations.discord block. If integrations.discord exists
+        // and is explicitly disabled, skip — the operator turned the
+        // integration off intentionally.
+        if let Some(cfg) = &integrations.discord {
+            if !cfg.enabled {
+                return Ok(());
+            }
         }
+
+        let webhook_url = channel
+            .webhook_url
+            .as_deref()
+            .or_else(|| {
+                integrations
+                    .discord
+                    .as_ref()
+                    .map(|c| c.webhook_url.as_str())
+                    .filter(|u| !u.is_empty())
+            })
+            .ok_or_else(|| anyhow::anyhow!("Discord channel requires webhook_url"))?;
 
         let body = serde_json::json!({ "content": text });
 
-        let resp = client
-            .post(&cfg.webhook_url)
-            .json(&body)
-            .send()
-            .await?;
+        let resp = client.post(webhook_url).json(&body).send().await?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -407,12 +432,23 @@ impl AlertDispatcher {
             .header(ContentType::TEXT_PLAIN)
             .body(text.to_string())?;
 
+        // Bug #28: smtp_username/smtp_password are Option<String>, but
+        // YAML `smtp_username: ""` deserializes as Some("") — not None.
+        // Treating those as "credentials provided" makes lettre attempt
+        // PLAIN/LOGIN with an empty user, which the server rejects:
+        // "No compatible authentication mechanism was found". Filter out
+        // empty strings so a user who just leaves the fields blank gets
+        // an unauthenticated send (the obvious behaviour for dev SMTP
+        // relays and many internal mail relays).
+        let user = cfg.smtp_username.as_ref().filter(|s| !s.is_empty());
+        let pass = cfg.smtp_password.as_ref().filter(|s| !s.is_empty());
+
         let transport = if cfg.use_tls {
             let mut builder =
                 AsyncSmtpTransport::<Tokio1Executor>::relay(&cfg.smtp_host)?
                     .port(cfg.smtp_port);
 
-            if let (Some(user), Some(pass)) = (&cfg.smtp_username, &cfg.smtp_password) {
+            if let (Some(user), Some(pass)) = (user, pass) {
                 builder =
                     builder.credentials(Credentials::new(user.clone(), pass.clone()));
             }
@@ -423,7 +459,7 @@ impl AlertDispatcher {
                 AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&cfg.smtp_host)
                     .port(cfg.smtp_port);
 
-            if let (Some(user), Some(pass)) = (&cfg.smtp_username, &cfg.smtp_password) {
+            if let (Some(user), Some(pass)) = (user, pass) {
                 builder =
                     builder.credentials(Credentials::new(user.clone(), pass.clone()));
             }

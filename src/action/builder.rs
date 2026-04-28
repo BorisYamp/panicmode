@@ -139,15 +139,31 @@ impl ActionExecutorBuilder {
         //
         // Bug #10: AlertCritical / AlertWarning / AlertInfo are NOT
         // ActionExecutor actions — they're routed through AlertDispatcher
-        // via the alert_tx channel. This validator iterates the
-        // ActionExecutor registry, so naively checking every action in
-        // monitor.actions against it produced a noisy "missing actions
-        // [AlertCritical]" warning at every startup, despite alerts
-        // working fine. Filter alert types out of the missing set: they
-        // are validated separately via the alerts/integrations config.
+        // via the alert_tx channel. Filter them out of the missing set
+        // so genuine misconfiguration isn't drowned in cosmetic noise.
+        //
+        // Bug #26: several action variants are documented in examples and
+        // accepted by the parser, but no implementation exists in the
+        // registry yet (mass_freeze, mass_freeze_top, mass_freeze_cluster,
+        // kill_process, rate_limit). A user copying from examples/config.yaml
+        // would see a generic "missing actions" warning and reasonably
+        // assume they typed a name wrong, when in fact the feature itself
+        // is not yet shipped. Split the report so each kind gets the
+        // correct treatment and message.
         let is_dispatcher_action = |at: &crate::action::ActionType| -> bool {
             use crate::action::ActionType::*;
             matches!(at, AlertCritical | AlertWarning | AlertInfo)
+        };
+        let is_unimplemented = |at: &crate::action::ActionType| -> bool {
+            use crate::action::ActionType::*;
+            matches!(
+                at,
+                MassFreeze
+                    | MassFreezeTop
+                    | MassFreezeCluster(_)
+                    | KillProcess
+                    | RateLimit
+            )
         };
 
         for monitor in &self.config.monitors {
@@ -155,11 +171,29 @@ impl ActionExecutorBuilder {
                 continue;
             }
 
+            let unimplemented: Vec<_> = monitor
+                .actions
+                .iter()
+                .filter(|at| is_unimplemented(at))
+                .collect();
+
             let missing: Vec<_> = monitor
                 .actions
                 .iter()
-                .filter(|at| !is_dispatcher_action(at) && self.registry.resolve(at).is_none())
+                .filter(|at| {
+                    !is_dispatcher_action(at)
+                        && !is_unimplemented(at)
+                        && self.registry.resolve(at).is_none()
+                })
                 .collect();
+
+            if !unimplemented.is_empty() {
+                tracing::warn!(
+                    "⚠️  Monitor '{}': actions {:?} are NOT YET IMPLEMENTED — they will silently no-op until shipped. Remove them from your config or use freeze_top_process/run_script as a substitute.",
+                    monitor.name,
+                    unimplemented,
+                );
+            }
 
             if !missing.is_empty() {
                 tracing::warn!(

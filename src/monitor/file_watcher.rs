@@ -94,36 +94,61 @@ impl FileWatcher {
         Ok(())
     }
     
-    /// Get event count for paths
+    /// Get event count for paths.
+    ///
+    /// `paths` are usually directories from the config (e.g. /etc/nginx/),
+    /// but notify stores each event under the FILE that changed
+    /// (/etc/nginx/nginx.conf). Bug #24: previously this used exact-match
+    /// HashMap lookup, so a configured directory path never matched any
+    /// stored file event — count was always 0.
+    ///
+    /// Now we match an event path if it equals the configured path OR is
+    /// a child of it. Each user path is checked against every stored
+    /// event_path; this is O(P*E) but P (configured paths) and E (active
+    /// recent events) are both small in practice.
     pub async fn get_event_count(&self, paths: &[String]) -> u64 {
+        use std::path::Path;
+
         let mut counts = self.event_counts.write().await;
         let now = Instant::now();
         let mut total = 0u64;
-        
-        for path in paths {
-            if let Some(path_events) = counts.get_mut(path) {
-                // Cleanup old events
-                if now.duration_since(path_events.last_cleanup) > Duration::from_secs(60) {
-                    path_events.events.retain(|&event_time| {
-                        now.duration_since(event_time) < self.aggregation_window
-                    });
-                    path_events.last_cleanup = now;
+        let max_per_path = self.max_events_per_path;
+        let agg_window = self.aggregation_window;
+
+        for (event_path, path_events) in counts.iter_mut() {
+            // Match event_path against any configured path: exact or under-dir
+            let any_match = paths.iter().any(|user_path| {
+                if event_path == user_path {
+                    return true;
                 }
-                
-                // Count recent events
-                let recent_count = path_events.events.iter()
-                    .filter(|&&event_time| now.duration_since(event_time) < self.aggregation_window)
-                    .count();
-                
-                total += recent_count as u64;
-                
-                // Limit events stored
-                if path_events.events.len() > self.max_events_per_path {
-                    path_events.events.drain(0..path_events.events.len() - self.max_events_per_path);
-                }
+                // Treat user_path as a directory: event_path is `user_path/<...>`
+                let event = Path::new(event_path);
+                let user = Path::new(user_path);
+                event.starts_with(user)
+            });
+
+            if !any_match {
+                continue;
+            }
+
+            // Cleanup old events lazily (at most once per minute per entry)
+            if now.duration_since(path_events.last_cleanup) > Duration::from_secs(60) {
+                path_events.events.retain(|&t| now.duration_since(t) < agg_window);
+                path_events.last_cleanup = now;
+            }
+
+            let recent = path_events.events.iter()
+                .filter(|&&t| now.duration_since(t) < agg_window)
+                .count();
+            total += recent as u64;
+
+            // Cap stored events per file to avoid unbounded growth
+            if path_events.events.len() > max_per_path {
+                let drain_count = path_events.events.len() - max_per_path;
+                path_events.events.drain(0..drain_count);
             }
         }
-        
+
         total
     }
     

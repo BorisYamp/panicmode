@@ -627,8 +627,23 @@ impl AlertDispatcher {
 // Helpers
 // ============================================================================
 
-/// Detects the server's IP address via the routing table without sending real traffic.
+/// Detects the server's IP address (or whatever label the operator wants
+/// shown in alert text). Source of truth, in order of priority:
+///
+///   1. `PANICMODE_SERVER_LABEL` env var — explicit override, useful for
+///      multi-homed hosts ("server-01"), demos / public screenshots
+///      ("se.rv.er.ip"), or hidden-behind-NAT setups where the
+///      auto-detected IP is the wrong one to show.
+///   2. UDP-route trick to 8.8.8.8 — no packet leaves the host, just
+///      asks the kernel which local IP would be used. Returns the IP
+///      that would actually originate outbound traffic.
+///   3. "unknown" fallback if no route exists.
 fn detect_server_ip() -> String {
+    if let Ok(label) = std::env::var("PANICMODE_SERVER_LABEL") {
+        if !label.is_empty() {
+            return label;
+        }
+    }
     std::net::UdpSocket::bind("0.0.0.0:0")
         .and_then(|s| {
             s.connect("8.8.8.8:80")?;

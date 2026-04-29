@@ -5,6 +5,29 @@
 # This file defines WHAT to monitor and WHEN to react.
 #
 # Documentation: https://github.com/BorisYamp/panicmode
+#
+# -----------------------------------------------------------------------------
+# Action availability — read before copying rules out of this example
+# -----------------------------------------------------------------------------
+# v0.1.0 ships these protective actions:
+#   ✅ freeze_top_process    — SIGSTOP top CPU consumers
+#   ✅ block_ip              — call user firewall script per attacking IP
+#   ✅ snapshot              — capture ps/ss/free/df/uptime to file
+#   ✅ run_script            — run user script with PANIC_* env vars
+#   ✅ alert_critical / alert_warning / alert_info
+#                           — dispatch to Telegram / ntfy / Discord / email
+#
+# These are documented in this example but NOT YET IMPLEMENTED — they are
+# accepted by the YAML parser, the daemon prints a clear "NOT YET
+# IMPLEMENTED — will silently no-op" warning at startup, and they do
+# nothing at runtime. Substitute as noted:
+#   ❌ mass_freeze              → use freeze_top_process
+#   ❌ mass_freeze_top          → use freeze_top_process
+#   ❌ mass_freeze_cluster:NAME → not yet; freeze_top_process is the closest
+#   ❌ kill_process             → not yet; use run_script with `kill -KILL`
+#   ❌ rate_limit               → not yet; use run_script with iptables/nft
+#
+# Tracking: see CHANGELOG.md "Known limitations" + GitHub issues.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -87,7 +110,7 @@ monitors:
     type: cpu_usage
     threshold: 95
     actions:
-      - mass_freeze
+      - mass_freeze              # ❌ NOT YET IMPLEMENTED — substitute freeze_top_process
       - snapshot
       - alert_critical
     enabled: true
@@ -96,7 +119,7 @@ monitors:
     type: cpu_usage
     threshold: 80
     actions:
-      - mass_freeze_top
+      - mass_freeze_top          # ❌ NOT YET IMPLEMENTED — substitute freeze_top_process
       - alert_warning
     enabled: true
 
@@ -106,7 +129,7 @@ monitors:
     type: memory_usage
     threshold: 95
     actions:
-      - mass_freeze
+      - mass_freeze              # ❌ NOT YET IMPLEMENTED — substitute freeze_top_process
       - snapshot
       - alert_critical
     enabled: true
@@ -134,7 +157,7 @@ monitors:
     type: connection_rate
     threshold: 10000
     actions:
-      - rate_limit
+      - rate_limit                # ❌ NOT YET IMPLEMENTED — substitute run_script (iptables/nft)
       - alert_warning
     enabled: true
 
@@ -153,7 +176,7 @@ monitors:
     type: auth_failures
     threshold: 100
     actions:
-      - mass_freeze
+      - mass_freeze              # ❌ NOT YET IMPLEMENTED — substitute freeze_top_process
       - snapshot
       - alert_critical
     enabled: true
@@ -231,7 +254,7 @@ monitors:
     type: cpu_usage
     threshold: 90
     actions:
-      - mass_freeze_cluster:website
+      - mass_freeze_cluster:website  # ❌ NOT YET IMPLEMENTED — substitute freeze_top_process
       - alert_warning
     enabled: true
 

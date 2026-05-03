@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- `freeze_top_process` no longer SIGSTOPs innocent observation tools (htop,
+  journalctl, editors) that briefly land in "top by CPU" after the real
+  culprits have already been frozen. Surfaced while preparing the v0.1
+  demo recording: stress-ng workers were correctly frozen, then htop at
+  ~6% CPU was caught in the next tick because the previous floor was a
+  hardcoded 1.0%.
+
+### Added
+
+- `mass_freeze.yaml → top_cpu.min_cpu_to_freeze` — minimum CPU percentage
+  a process must use to be eligible for freezing (default 50.0%).
+  Replaces the hardcoded 1.0% floor.
+
+---
+
 ## [0.1.0] — 2026-04-29
 
 First public release. Built on a fresh Contabo VPS, hardened over four

@@ -6,6 +6,8 @@
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux-lightgrey.svg)](https://github.com/BorisYamp/panicmode)
 [![Rust](https://img.shields.io/badge/Rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 
+![PanicMode demo: CPU spike, detected, process frozen, Telegram alert delivered — under 2 seconds end-to-end.](docs/demo.gif)
+
 ```text
 [CRITICAL] CPU Spike: 100.0% (threshold: 95%) | server: 198.51.100.7
   → snapshot saved /var/log/panicmode/snapshots/panicmode-snapshot-1777330622.txt
@@ -20,7 +22,7 @@
 Most server monitors page you. PanicMode pages you _and_ buys you 60 seconds to look at the snapshot before the box is back to a known-good state. Built for solo operators and small teams who run their own boxes and want active defence without standing up a Wazuh/ELK stack.
 
 **Status:** v0.1.0, Linux-only, single binary + sample systemd unit.  
-Production-tested on a fresh VPS through 4 hardening rounds (see [CHANGELOG](CHANGELOG.md)). 28 bugs found and fixed before tag; 26+ real botnet IPs blocked during the test window.
+Hardened across 4 rounds before tag — 28 bugs found and fixed (see [CHANGELOG](CHANGELOG.md)). Live on a public VPS for 5+ days at the time of release alongside fail2ban — between them, **946 botnet IPs blocked and 7,259 SSH brute-force attempts repelled**. PanicMode itself: ~15 MB RAM steady, ~1 % CPU, zero crashes, zero false positives.
 
 ---
 
@@ -32,6 +34,52 @@ Production-tested on a fresh VPS through 4 hardening rounds (see [CHANGELOG](CHA
 - **Alerts** you via Telegram, ntfy, Discord, email, or phone call (Twilio, experimental)
 - **Persists** every incident to SQLite + replays IP blocks across reboots
 - **Survives** failures — each task is supervised and restarted on crash; daemon hardened under systemd
+
+---
+
+## The Story
+
+A small dev shop I know was losing about 30 minutes of work every morning for a week. One VPS ran everything. Juniors wrote most of the server code. There was no on-call rotation.
+
+Two failure modes were grinding through them:
+
+1. A junior pushed a regression late at night. The server hung at 2am. Nobody found out until the first person walked in at 9am, saw the website was down, called the manager, who called a mid-level engineer, who SSHed in and manually restarted everything.
+2. Botnets brute-forced SSH or flooded the box. Same outcome, different cause.
+
+Two compounding problems on top of each other:
+
+- **Hours of downtime nobody knew about.** Lost work, missed calls, inbound calls *from* clients asking why the website was dead.
+- **By the time the engineer logged in, the restart cycle had wiped any in-memory state.** They were debugging blind every single time.
+
+They tried `fail2ban` + `monit` + a Telegram bot stitched together. It worked badly. After the third "thanks but it broke again," I sat down and built PanicMode — a single binary with three priorities, in this order:
+
+1. **Page a human immediately**, on a channel they already read, without depending on a third-party uptime monitor or paying for a SaaS.
+2. **Auto-handle the obvious stuff** — SSH brute-forcers get banned, runaway processes get suspended before the OOM killer triggers a cascade.
+3. **Freeze the broken state instead of killing it.** `SIGSTOP` keeps the offending process suspended in memory, with all its logs and stack intact. The engineer logs in to a frozen-in-place crime scene, not a clean server that's already restarted and lost its evidence.
+
+That third one is the part I'm most proud of. Most of the time the engineer figures out *what went wrong* before they have to figure out *how to bring it back up* — and that's the difference between a 5-minute fix and a 4-hour incident.
+
+---
+
+## Why PanicMode (and not X)?
+
+The host-monitoring space is crowded, and most options are heavier than PanicMode. That's intentional, not a limitation — and it's worth understanding the trade-off before you choose.
+
+Tools like Falco, Wazuh, and Datadog are built on the assumption that **the more you observe, the safer you are**. Every syscall, every metric, every file modification — recorded, indexed, alerted on. That's genuinely powerful when you have a team to triage the firehose. It also means most single-VPS setups end up muting 90 % of the alerts inside a month.
+
+PanicMode bets the other way. Most of what a healthy server does is fine and doesn't need a watcher. What you actually want is for the server **not to die quietly** — to make noise when something is genuinely critical, and to act before "critical" turns into "down for four hours overnight." So PanicMode watches less, alerts less, and *acts* directly when it has to.
+
+Both philosophies are valid. Pick the one that matches the temperament of your team and the size of what you're protecting.
+
+| Tool | What it does well | Where PanicMode trades differently |
+|---|---|---|
+| **fail2ban** | SSH brute-force banning, mature, battle-tested | fail2ban does one thing very well. PanicMode goes wider — bans IPs *and* freezes runaway processes, takes snapshots, and routes alerts to Telegram / Discord / ntfy / email / phone, all in one binary and one YAML. They also coexist happily; PanicMode runs alongside fail2ban on its own production VPS. |
+| **monit** | Process restart, simple, battle-tested | Same shape as PanicMode but C-era ergonomics. PanicMode is async-Rust, parses journald with a kernel-attributed unit filter (auth log can't be `logger`-spoofed), and ships modern alerting out of the box. |
+| **Wazuh** | Full SIEM, enterprise-grade audit and compliance | Wazuh wants Elasticsearch + a manager + agents per host; PanicMode is one ~9 MB binary, one YAML, one systemd unit. Different decision about how much infrastructure you want on top of your infrastructure. |
+| **Falco (CNCF)** | Kernel-level syscall audit, exceptional visibility, deep Kubernetes integration | Different temperament rather than different scope. Falco records and emits — every syscall, every container event — and lets a separate responder (Falcosidekick + a controller, or your own) decide what to do. PanicMode watches less and acts immediately, in-process. Falco gives you everything to look at; PanicMode tries to mean less to look at. |
+| **Datadog / hosted APM** | Polished UX, hosted, scales to anything | $15-$30 per host per month and your metrics flowing to someone else's wire. PanicMode is self-hosted with no phone-home, no SaaS, no monthly bill. |
+
+PanicMode and these tools aren't strictly competing — most coexist fine. The thing that's specific to PanicMode is **active mitigation as a default, not an add-on**. If you find a row above that's wrong or unfair, [open an issue](https://github.com/BorisYamp/panicmode/issues) — these tools all evolve and the comparison will need updates.
 
 ---
 

@@ -1026,16 +1026,32 @@ impl Default for MassFreezeConfig {
 pub struct TopCpuConfig {
     #[serde(default = "default_top_count")]
     pub count: usize,
+
+    /// Minimum CPU% a process must use to be eligible for freezing.
+    /// Below this threshold the process is never frozen, even if it sits
+    /// in the top-N by CPU at the moment. Prevents observation tools
+    /// (htop, journalctl, your editor) from being SIGSTOPped at 5–10%
+    /// once the real culprits at 100% are already frozen and the
+    /// "top of the remaining list" becomes innocent.
+    #[serde(default = "default_min_cpu_to_freeze")]
+    pub min_cpu_to_freeze: f32,
 }
 
 impl Default for TopCpuConfig {
     fn default() -> Self {
-        Self { count: 5 }
+        Self {
+            count: 5,
+            min_cpu_to_freeze: default_min_cpu_to_freeze(),
+        }
     }
 }
 
 fn default_top_count() -> usize {
     5
+}
+
+fn default_min_cpu_to_freeze() -> f32 {
+    50.0
 }
 
 impl MassFreezeConfig {

@@ -40,6 +40,7 @@ pub struct ProcessAction {
     _config: Arc<Config>,
     whitelist: Vec<String>,
     freeze_count: usize,
+    min_cpu_to_freeze: f32,
 }
 
 impl ProcessAction {
@@ -55,8 +56,9 @@ impl ProcessAction {
         let merged_whitelist = Self::merge_whitelist(&freeze_cfg.whitelist);
 
         tracing::info!(
-            "ProcessAction: freeze_count={}, whitelist={:?} (hardcoded protected: {:?})",
+            "ProcessAction: freeze_count={}, min_cpu_to_freeze={:.1}%, whitelist={:?} (hardcoded protected: {:?})",
             freeze_cfg.top_cpu.count,
+            freeze_cfg.top_cpu.min_cpu_to_freeze,
             merged_whitelist,
             HARDCODED_PROTECTED,
         );
@@ -65,6 +67,7 @@ impl ProcessAction {
             _config: config,
             whitelist: merged_whitelist,
             freeze_count: freeze_cfg.top_cpu.count,
+            min_cpu_to_freeze: freeze_cfg.top_cpu.min_cpu_to_freeze,
         })
     }
 
@@ -91,6 +94,7 @@ impl ProcessAction {
 impl Action for ProcessAction {
     async fn execute(&self, _ctx: &ActionContext<'_>) -> Result<()> {
         let freeze_count = self.freeze_count;
+        let min_cpu_to_freeze = self.min_cpu_to_freeze;
         let own_pid = std::process::id();
         let whitelist = self.whitelist.clone();
 
@@ -181,8 +185,14 @@ impl Action for ProcessAction {
                         tracing::debug!("Skipping kernel thread: {} (pid {})", name, pid);
                         return false;
                     }
-                    // Skip processes below the CPU threshold
-                    if p.cpu_usage() <= 1.0 {
+                    // Skip processes below the configured CPU threshold.
+                    // The previous hardcoded 1.0% floor was too low: after the
+                    // real CPU offenders were frozen, observation tools (htop,
+                    // journalctl, the operator's editor) at 5–10% became "top
+                    // of the remaining list" and got SIGSTOP'd too. The
+                    // configured floor (default 50%) is high enough that only
+                    // genuinely guilty processes qualify — bug from v0.1.0.
+                    if p.cpu_usage() < min_cpu_to_freeze {
                         return false;
                     }
                     // Check whitelist: substring match (case-insensitive)

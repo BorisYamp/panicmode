@@ -31,9 +31,16 @@ top_cpu:
   # Processes are sorted by CPU usage descending; the first N are taken
   count: 5
 
-  # Minimum CPU usage required to freeze (optional)
-  # A process with CPU < min_cpu_percent will not be frozen even if in the top list
-  # min_cpu_percent: 10.0
+  # Minimum CPU% a process must use to be eligible for freezing.
+  # A process below this threshold is NEVER frozen, even if it appears
+  # in the top-N list. Default: 50.0%.
+  #
+  # Why 50% and not, say, 5%? Because the action runs once per detection
+  # tick. After the actual culprits at 100% are SIGSTOP'd, the "top of the
+  # remaining processes" becomes whatever was second-place — typically
+  # observation tools (htop, journalctl) at 5–10% CPU. With a low floor
+  # they'd get caught in the next tick. 50% leaves them safe.
+  min_cpu_to_freeze: 50.0
 
 # -----------------------------------------------------------------------------
 # Settings for mode: cluster

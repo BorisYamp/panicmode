@@ -62,6 +62,18 @@ go.
 > stack nicely — if you want belt-and-suspenders, run both and
 > Kuma will verify that PanicMode is actually keeping the box up.
 
+### "Why not just systemd's Restart=on-failure?"
+
+> systemd's restart is exactly the thing PanicMode is reacting
+> against. Restart wipes in-memory state. The engineer logs in to a
+> clean process they can't debug. PanicMode's freeze keeps the
+> broken state intact for forensics; you decide whether to restart
+> or pick it apart first.
+>
+> Also systemd only watches its own units. PanicMode also watches
+> CPU / memory / disk / SSH auth / file changes / arbitrary
+> scripts. Different scope.
+
 ---
 
 ## Implementation questions
@@ -87,6 +99,53 @@ get OOM-killed eventually?"
 > memory pressure doesn't grow, and the engineer logs in to a
 > stopped-but-intact process they can either kill cleanly or
 > resume to capture more state.
+
+### "Is freezing actually safe? What if it picks the wrong process?"
+
+> Three layers of protection:
+>
+> 1. **Hardcoded never-freeze list** in code: sshd, systemd, init,
+>    kthreadd, dbus, getty, panicmode itself. A misconfigured
+>    user YAML cannot override these — you can't lock yourself
+>    out of your own box.
+> 2. **`min_cpu_to_freeze`** threshold (default 50.0%) so anything
+>    that's clearly not the culprit is left alone. The fix that
+>    became v0.1.1 was exactly this — earlier versions would catch
+>    htop at 5% CPU after the actual offenders had been frozen.
+> 3. **User whitelist** in `mass_freeze.yaml` for adding your own
+>    exceptions (your database, your auth service, etc.).
+>
+> Combined: kernel threads, hardcoded critical processes, your
+> chosen apps, and anything below the CPU floor are all immune.
+> What's left is the actual top-CPU offenders.
+
+### "What about kernel panics or full OOM cascades?"
+
+> PanicMode can't prevent a kernel panic — at that point the box
+> is gone and there's nothing user-space can do. For OOM cascades,
+> the freeze action triggers as soon as memory crosses the
+> configured threshold (default 95%), which usually happens before
+> OOM-killer pressure builds. So in practice the SIGSTOP arrives
+> before the cascade starts. If memory is *already* exhausted by
+> the time PanicMode notices, OOM-killer wins; PanicMode is
+> defensive but not magic.
+
+### "Why Telegram as the default channel?"
+
+> Three reasons, in order:
+>
+> 1. **No infra.** A bot is two API calls and 30 seconds to set
+>    up. No SMTP server, no Slack workspace, no SaaS account.
+> 2. **Already on the operator's phone.** Most people in this
+>    audience already have Telegram open. Adding email-from-
+>    server isn't great if your fastest path is Twitter DMs.
+> 3. **Instant.** ~1 second from incident to your screen. Email
+>    is minutes; Discord and ntfy are similar to Telegram. The
+>    code paths for all of them are wired up — Telegram is just
+>    the easiest first step.
+>
+> Discord, ntfy, email, and Twilio are all alternatives in the
+> same `alerts:` config. Pick any.
 
 ### "Does it run in containers?"
 

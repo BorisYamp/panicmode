@@ -5,10 +5,20 @@
 ## Title (one line, ≤ 80 chars)
 
 ```
-Show HN: PanicMode – Linux server protector that acts, not just alerts
+Show HN: PanicMode – freezes broken Linux processes instead of killing them
 ```
 
 Tilde-dash (`–`), not hyphen. No emojis. No CAPS.
+
+The earlier draft (`Linux server protector that acts, not just alerts`) was
+too generic — HN reads titles like an RSS feed and skips anything that
+sounds like one of the 200 monitoring tools they've seen this year. The
+freeze-vs-kill angle is contrarian, concrete, and remembered.
+
+Backup variants if this one doesn't feel right on the day:
+
+- `Show HN: PanicMode – auto-freezes crashed services so you can debug them later`
+- `Show HN: PanicMode – a self-hosted server watchdog that freezes failures`
 
 ## Link
 
@@ -19,43 +29,49 @@ Tilde-dash (`–`), not hyphen. No emojis. No CAPS.
 ```
 Hi HN,
 
-I'm Boris. I built PanicMode after watching a small dev shop I know
-lose ~30 minutes of work every single morning for a week.
+I'm Boris. I built PanicMode to solve a problem I kept watching small
+dev shops hit: when a server fails, the restart cycle destroys the
+evidence before anyone can debug it. systemd restarts the service,
+the OOM killer reclaims memory, the operator logs in to a clean box
+that has no clue what just happened.
 
-The setup: one VPS running everything, juniors writing most of the
-server code, no on-call rotation. Two failure modes were chewing
-through productivity:
+So PanicMode does the opposite. When something goes sideways it
+SIGSTOPs the offender — the broken process stays suspended in memory
+with all its state, logs, and stack intact. The engineer logs in to
+a frozen-in-place crime scene, not a clean server that already lost
+its clues.
 
-1. A junior pushed a regression late at night. The server hung at
-   2am. Nobody found out until the first person walked in at 9am, saw
-   the website was down, called the manager, who called a mid-level
-   engineer, who SSHed in and manually restarted everything.
-2. Botnets brute-forced SSH or flooded the box. Same outcome,
-   different cause.
+The story it grew out of:
 
-Two compounding problems:
+A small dev shop I know was losing ~30 minutes of work every morning
+for a week. One VPS, juniors writing most of the server code, no
+on-call rotation. Two failure modes were grinding through them:
 
-- Hours of downtime nobody knew about. Lost work, missed calls,
-  inbound calls *from* clients asking why the website was dead.
-- By the time the engineer logged in, the restart cycle had wiped any
-  in-memory state. They were debugging blind every time.
+1. A junior pushed a regression late at night. Server hung at 2am.
+   Nobody found out until the first person walked in at 9am, saw the
+   website down, called the manager, who called a mid-level engineer,
+   who SSHed in and manually restarted everything.
+2. Botnets brute-forced SSH or flooded the box. Same outcome.
+
+Two problems compounding:
+
+- Hours of downtime nobody knew about. Lost work, calls *from*
+  clients asking why the website was dead.
+- By the time the engineer logged in, the restart had wiped any
+  in-memory state. Debugging blind every time.
 
 They tried fail2ban + monit + a Telegram bot stitched together. It
 worked badly. After the third "thanks but it broke again" I sat down
-and built PanicMode — a single binary that does three things in this
-priority order:
+and built PanicMode — a single binary with three priorities:
 
-1. Pages a human immediately, on a channel they already read
-   (Telegram by default — no SaaS uptime monitor, no third-party
-   server, no monthly bill).
-2. Auto-handles the things that don't need a human — SSH brute-forcers
-   get iptables-banned, runaway memory hogs get SIGSTOP'd before the
-   OOM killer triggers a cascade.
-3. Freezes the broken state instead of killing it. This is the piece
-   I'm most proud of. SIGSTOP keeps the offending process suspended in
-   memory with all its logs and stack intact. The engineer logs in to
-   a frozen-in-place crime scene, not a clean server that's already
-   restarted and lost its evidence.
+1. Page a human immediately on a channel they already read (Telegram
+   by default — no SaaS uptime monitor, no third-party server, no
+   monthly bill).
+2. Auto-handle the obvious stuff — SSH brute-forcers get
+   iptables-banned, runaway memory hogs get SIGSTOP'd before the OOM
+   killer triggers a cascade.
+3. Freeze, don't kill. The crime-scene point above. This is the bit
+   I'm most proud of.
 
 Some specifics worth flagging up front:
 

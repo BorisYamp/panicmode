@@ -197,7 +197,9 @@ That's it. PanicMode will start, begin collecting metrics from inside the contai
 
 When an incident fires, PanicMode runs the actions you list on that monitor. v0.1.0 ships:
 
-- **`freeze_top_process`** — SIGSTOP the top CPU offenders. Hardcoded protection for `sshd`, `systemd`, `init`, `kthreadd`, `dbus`, `getty`, `panicmode` is merged on top of any user whitelist (a misconfigured `mass_freeze.yaml` can't lock you out of the box). Skips its own tokio runtime threads and Linux kernel threads.
+- **`freeze_top_process`** — SIGSTOP the top CPU offenders. Two safety floors:
+  - **Hardcoded protection** for `sshd`, `systemd`, `init`, `kthreadd`, `dbus`, `getty`, `panicmode`, plus PanicMode's own tokio runtime threads and Linux kernel threads. A misconfigured `mass_freeze.yaml` can't lock you out of the box.
+  - **`top_cpu.min_cpu_to_freeze`** in `mass_freeze.yaml` (default **50.0%**) — processes below this CPU% are never frozen, even if they're top-N at the moment. Stops the action from catching observation tools (htop, journalctl, your editor) that briefly land in "top of remaining" after the actual culprits at 100% have already been frozen. Tunable per deployment: lower it (e.g. 30.0) for more aggressive mitigation, raise it (e.g. 80.0) if your normal load is high.
 - **`block_ip`** — Calls your firewall script per public IP extracted from the incident. Blocks persist in SQLite and replay through `restore_blocked_ips` after reboot. Manage with `panicmode-ctl list` / `panicmode-ctl unblock <IP>`. Reference scripts in [`examples/`](examples/) use `iptables` and are idempotent.
 - **`snapshot`** — Capture `ps`, `ss`, `free`, `df`, `uptime` to a timestamped file under `snapshot_dir`.
 - **`run_script`** — Execute any user script. Incident context arrives as env vars `PANIC_INCIDENT_NAME`, `PANIC_SEVERITY`, `PANIC_DESCRIPTION`, `PANIC_DETAILS`, `PANIC_THRESHOLD`, `PANIC_CURRENT_VALUE` (each capped at 8 KB). **Never `eval` these in your script** — they may contain attacker-influenced text.

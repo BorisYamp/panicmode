@@ -85,14 +85,19 @@ PanicMode and these tools aren't strictly competing — most coexist fine. The t
 
 ## Quick Start
 
-### Prerequisites
+### Install (pre-built binary, recommended)
 
-- Linux (x86\_64 or aarch64)
-- Rust 1.88+ (`curl https://sh.rustup.rs -sSf | sh`)
-
-### Build & Install
+x86_64 Linux, ~9 MB total. Verify the SHA256SUMS if you care.
 
 ```bash
+curl -L https://github.com/BorisYamp/panicmode/releases/download/v0.1.1/panicmode-v0.1.1-x86_64-linux.tar.gz | tar xz
+sudo mv panicmode panicmode-ctl /usr/local/bin/
+```
+
+### Or build from source
+
+```bash
+# Requires Rust 1.88+ (curl https://sh.rustup.rs -sSf | sh)
 git clone https://github.com/BorisYamp/panicmode.git
 cd panicmode
 cargo build --release

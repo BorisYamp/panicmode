@@ -1,6 +1,8 @@
 # PanicMode
 
-> Self-hosted Linux server protector that **acts** when something goes wrong — `SIGSTOP`s runaway processes, `iptables`-bans brute-forcers, snapshots the box for post-mortem — locally, in a single ~9 MB Rust binary, no SaaS phones home.
+> **PanicMode freezes broken Linux processes instead of restarting them.** When something goes sideways on your server, `SIGSTOP` keeps the broken state intact so you can debug it — instead of a restart cycle that wipes the evidence before you log in.
+>
+> Action-first, not yet-another-monitor: it bans brute-forcers, freezes runaways, snapshots state, and pings you on Telegram / Discord / ntfy / email — all locally, single ~9 MB Rust binary, no SaaS phones home.
 
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/BorisYamp/panicmode)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux-lightgrey.svg)](https://github.com/BorisYamp/panicmode)
@@ -21,8 +23,9 @@
 
 Most server monitors page you. PanicMode pages you _and_ buys you 60 seconds to look at the snapshot before the box is back to a known-good state. Built for solo operators and small teams who run their own boxes and want active defence without standing up a Wazuh/ELK stack.
 
-**Status:** v0.1.1, Linux-only, single binary + sample systemd unit.  
-Hardened across 4 rounds before tag — 28 bugs found and fixed (see [CHANGELOG](CHANGELOG.md)). Live on a public VPS for 5+ days at the time of release alongside fail2ban — between them, **98 unique source IPs blocked over 946 ban events, 7,259 SSH brute-force attempts repelled** (top sources Romania / China / Vietnam — see [`docs/threat-stats.md`](docs/threat-stats.md) for the ASN/country breakdown). PanicMode itself: ~15 MB RAM steady, ~1 % CPU, zero crashes, zero false positives.
+**Status:** v0.1.1, Linux-only, single binary + sample systemd unit. Hardened across 4 review rounds before tag — see [CHANGELOG](CHANGELOG.md) for the autopsy.
+
+**On a live VPS (5+ days, alongside fail2ban):** 98 unique source IPs blocked, 7,259 SSH brute-force attempts repelled, ~15 MB RAM, ~1 % CPU. Zero crashes, zero false positives. Full ASN/country breakdown in [`docs/threat-stats.md`](docs/threat-stats.md).
 
 ---
 
@@ -107,39 +110,23 @@ sudo cp target/release/panicmode-ctl /usr/local/bin/
 
 ### Minimal Configuration
 
-Create `/etc/panicmode/config.yaml`:
+Create `/etc/panicmode/config.yaml` — ten lines is enough to start:
 
 ```yaml
-performance:
-  cpu_limit: 5.0
-  memory_limit_mb: 50
-  check_interval: "5s"
-
 monitors:
-  - name: "High CPU"
+  - name: "Critical CPU"
     type: cpu_usage
-    threshold: 90.0
-    actions: [alert_critical]
-    enabled: true
-
-  - name: "High Memory"
-    type: memory_usage
-    threshold: 85.0
-    actions: [alert_warning]
-    enabled: true
+    threshold: 95
+    actions: [snapshot, alert_critical, freeze_top_process]
 
 alerts:
-  critical:
-    - channel: telegram
-  warning:
-    - channel: telegram
+  critical: [{ channel: telegram }]
 
 integrations:
-  telegram:
-    enabled: true
-    bot_token: "YOUR_BOT_TOKEN"
-    chat_id: "YOUR_CHAT_ID"
+  telegram: { enabled: true, bot_token: "YOUR_TOKEN", chat_id: "YOUR_CHAT" }
 ```
+
+That gives you: alert + snapshot + freeze when CPU crosses 95%, sent to Telegram. Add more monitors (memory / disk / SSH brute-force / file changes) by copying the block — see [`examples/config.yaml`](examples/config.yaml) for everything.
 
 ### Run
 

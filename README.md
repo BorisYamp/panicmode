@@ -21,8 +21,8 @@
 
 Most server monitors page you. PanicMode pages you _and_ buys you 60 seconds to look at the snapshot before the box is back to a known-good state. Built for solo operators and small teams who run their own boxes and want active defence without standing up a Wazuh/ELK stack.
 
-**Status:** v0.1.0, Linux-only, single binary + sample systemd unit.  
-Hardened across 4 rounds before tag — 28 bugs found and fixed (see [CHANGELOG](CHANGELOG.md)). Live on a public VPS for 5+ days at the time of release alongside fail2ban — between them, **946 botnet IPs blocked and 7,259 SSH brute-force attempts repelled**. PanicMode itself: ~15 MB RAM steady, ~1 % CPU, zero crashes, zero false positives.
+**Status:** v0.1.1, Linux-only, single binary + sample systemd unit.  
+Hardened across 4 rounds before tag — 28 bugs found and fixed (see [CHANGELOG](CHANGELOG.md)). Live on a public VPS for 5+ days at the time of release alongside fail2ban — between them, **98 unique source IPs blocked over 946 ban events, 7,259 SSH brute-force attempts repelled** (top sources Romania / China / Vietnam — see [`docs/threat-stats.md`](docs/threat-stats.md) for the ASN/country breakdown). PanicMode itself: ~15 MB RAM steady, ~1 % CPU, zero crashes, zero false positives.
 
 ---
 

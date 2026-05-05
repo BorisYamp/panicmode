@@ -45,31 +45,21 @@ with the broken piece frozen in place exactly where it failed.
 The story it grew out of:
 
 A small dev shop I know was losing ~30 minutes of work every morning
-for a week. One VPS ran their internal CRM, code mostly written by
-juniors, no on-call rotation. Two failure modes were grinding through
-them, alternating night by night:
+for a week. One VPS ran their internal CRM, juniors writing most of
+the code, no on-call rotation. Two things ground through them in
+alternation: DDoS / brute-force probes that their country-level
+firewall couldn't really stop, and small mistakes from the juniors
+that the already-stressed box couldn't absorb.
 
-1. The CRM kept getting hit by DDoS probes and brute-force traffic.
-   Their only defence was a country-level firewall — it helped a
-   little, but determined attackers got around it routinely.
-2. The juniors would push small mistakes that the already-stressed
-   box couldn't absorb. A bug that should have been a 5-minute fix
-   would knock everything over instead.
-
-The scary part wasn't the outages themselves — it was that *the only
-way to know whether the box was alive was to log in and check by
-hand*. The office opened at 7am, so they settled into a daily 6am
-ritual: somebody had to connect from home an hour before the doors
-unlocked, just to verify the CRM was still up. The ritual itself
-became the new problem — someone always had to be the early-rising
-server-babysitter, every day including weekends. And on the
-mornings when it wasn't alive, the chain would start: that person
-called the manager, manager called a friend at another company who
-happened to be a mid-level engineer, that friend SSHed in out of
-goodwill and restarted everything by hand. Up to 30 minutes of
-every workday was burned on this routine before the team could
-even begin. The company was bleeding money the whole time the
-chain was running.
+The scary part wasn't the outages — it was that *the only way to
+know was to log in and check by hand*. The office opened at 7am, so
+someone had to wake up at 6 every day, weekends included, and remote
+in from home to verify the CRM was alive. The ritual itself became
+the new problem. On bad mornings the chain would start: call the
+manager, manager calls a friend at another company who happens to
+be a mid-level engineer, friend SSHes in out of goodwill and
+restarts everything. Thirty minutes of every workday gone before
+anyone could start.
 
 They asked me for a solution with one hard constraint: no extra
 servers, no SaaS subscriptions, no recurring costs, nothing new to

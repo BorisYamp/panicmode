@@ -21,7 +21,7 @@
   → block_ip → iptables -I INPUT 1 -s 198.51.100.1 -j DROP
 ```
 
-Most server monitors page you. PanicMode pages you _and_ buys you 60 seconds to look at the snapshot before the box is back to a known-good state. Built for solo operators and small teams who run their own boxes and want active defence without standing up a Wazuh/ELK stack.
+Most server monitors just page you. PanicMode does two things they don't: it keeps the rest of the box running through a broken process or an active attack, and it freezes the offender in place so you can investigate what actually failed when you have the time — not when you're being paged at 2am. Built for solo operators and small teams who run their own boxes and want active defence without standing up a Wazuh/ELK stack.
 
 **Status:** v0.1.1, Linux-only, single binary + sample systemd unit. Hardened across 4 review rounds before tag — see [CHANGELOG](CHANGELOG.md) for the autopsy.
 
@@ -42,24 +42,19 @@ Most server monitors page you. PanicMode pages you _and_ buys you 60 seconds to 
 
 ## The Story
 
-A small dev shop I know was losing about 30 minutes of work every morning for a week. One VPS ran their internal CRM — code mostly written by juniors, no on-call rotation.
+A small dev shop I know was losing 30 minutes of work every morning for a week. One VPS ran their internal CRM — juniors writing most of the code, no on-call rotation. Two things ground through them in alternation: DDoS / brute-force probes their country-level firewall couldn't really stop, and small mistakes from the juniors that the already-stressed box couldn't absorb.
 
-Two failure modes were grinding through them, alternating night by night:
+The scary part wasn't the outages — it was that **the only way to know was to log in and check by hand**. The office opened at 7am, so someone had to wake up at 6 every day, weekends included, and remote in from home to verify the CRM was alive. **The ritual itself became the new problem.** And on bad mornings the chain would start: call the manager, manager calls a friend at another company who happens to be a mid-level engineer, friend SSHes in out of goodwill and restarts everything. Thirty minutes of every workday gone before anyone could start.
 
-1. The CRM kept getting hit by DDoS probes and brute-force traffic. Their only defence was a country-level firewall — it helped a little, but determined attackers routinely got around it.
-2. The juniors would push small mistakes that the already-stressed box couldn't absorb. A bug that should have been a 5-minute fix would knock everything over instead.
+They asked me for a solution with one hard constraint: **no extra servers, no SaaS, no recurring costs, nothing new to secure.** Whatever it was had to run on the same VPS, in the same single process. PanicMode is what came out of it — three priorities, in order:
 
-The scary part wasn't that the server kept going down. It was that **the only way to know whether it was down was to log in and check by hand**. The office opened at 7am, so they settled into a daily 6am ritual: somebody had to connect to the box from home an hour before the doors unlocked, just to verify the CRM was still alive. The ritual itself became the new problem — someone always had to be the early-rising server-babysitter, every day, including weekends. And on the mornings when the box wasn't alive, the chain would start: that person called the manager, the manager called a friend who happened to be a mid-level engineer somewhere else, that friend SSHed in out of goodwill and restarted everything by hand. Up to 30 minutes of every workday was burned on this routine before the team could even begin. The company was losing money the whole time the chain was running.
+1. **Get a human onto the box the moment something breaks** — no uptime monitor, no third-party servers, nothing recurring to pay for. Telegram is already in everyone's pocket; the box sends the message itself.
 
-They asked me for a solution with one hard constraint: **no extra servers, no SaaS subscriptions, no recurring costs, nothing new to secure.** Whatever it was had to run on the same VPS they already paid for, in the same single process. PanicMode is what came out of it — three priorities, in this order:
+2. **Auto-handle the obvious stuff** so the human isn't always the first responder. SSH brute-force / DDoS sources get iptables-banned at the first round of failures.
 
-1. **Get a human onto the box the moment something breaks** — without paying for an uptime monitor and without routing alerts through anyone else's infrastructure. Telegram is already in everyone's pocket; the box sends the message itself, nobody else is in the loop, nothing recurring to pay for.
-
-2. **Auto-handle the obvious stuff** so the human doesn't have to be the first responder. SSH brute-force / DDoS sources get iptables-banned at the first round of failures.
-
-3. **Freeze the broken process, don't kill it.** This is the part I'm most proud of, and it does two things at once:
-   - **The rest of the box stays alive.** A runaway process gets `SIGSTOP`'d before it eats all the CPU and RAM and takes the whole server down with it. The CRM keeps responding for everyone else; the team can deal with the incident during business hours instead of at 2am.
-   - **The logs survive.** When a process crashes hard, its in-flight log buffers usually don't get a chance to flush to disk before the restart cycle wipes everything. With `SIGSTOP`, the process stays in memory exactly where it was — logs, stack, file descriptors all intact. The engineer logs in to a frozen-in-place crime scene, not a clean restarted box that already lost its clues.
+3. **Freeze the broken process, don't kill it.** Two purposes at once:
+   - **The box stays alive.** A runaway process gets `SIGSTOP`'d before it eats all the CPU and RAM and takes the whole server down with it. The CRM keeps serving everyone else; the team can deal with the incident in business hours instead of at 2am.
+   - **The logs survive.** When a process crashes hard, its in-flight log buffers usually don't make it to disk before the restart cycle wipes everything. With `SIGSTOP`, the process stays in memory exactly where it was — logs, stack, file descriptors all intact. The engineer logs in to a frozen-in-place crime scene, not a clean restarted box that already lost its clues.
 
 That last point — both halves of it — is the difference between a 5-minute fix and a 4-hour incident.
 
@@ -77,7 +72,7 @@ Both philosophies are valid. Pick the one that matches the temperament of your t
 
 | Tool | What it does well | Where PanicMode trades differently |
 |---|---|---|
-| **fail2ban** | SSH brute-force banning, mature, battle-tested | fail2ban does one thing very well. PanicMode goes wider — bans IPs *and* freezes runaway processes, takes snapshots, and routes alerts to Telegram / Discord / ntfy / email / phone, all in one binary and one YAML. They also coexist happily; PanicMode runs alongside fail2ban on its own production VPS. |
+| **fail2ban** | SSH brute-force banning, mature, battle-tested | fail2ban does one thing very well. PanicMode goes wider — bans IPs *and* freezes runaway processes, takes snapshots, and routes alerts to Telegram / Discord / ntfy / email / phone, all in one binary and one YAML. They also coexist happily; PanicMode runs alongside fail2ban on the production VPS the stats above came from. |
 | **monit** | Process restart, simple, battle-tested | Same shape as PanicMode but C-era ergonomics. PanicMode is async-Rust, parses journald with a kernel-attributed unit filter (auth log can't be `logger`-spoofed), and ships modern alerting out of the box. |
 | **Wazuh** | Full SIEM, enterprise-grade audit and compliance | Wazuh wants Elasticsearch + a manager + agents per host; PanicMode is one ~9 MB binary, one YAML, one systemd unit. Different decision about how much infrastructure you want on top of your infrastructure. |
 | **Falco (CNCF)** | Kernel-level syscall audit, exceptional visibility, deep Kubernetes integration | Different temperament rather than different scope. Falco records and emits — every syscall, every container event — and lets a separate responder (Falcosidekick + a controller, or your own) decide what to do. PanicMode watches less and acts immediately, in-process. Falco gives you everything to look at; PanicMode tries to mean less to look at. |

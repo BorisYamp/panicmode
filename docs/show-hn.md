@@ -56,15 +56,20 @@ them, alternating night by night:
    box couldn't absorb. A bug that should have been a 5-minute fix
    would knock everything over instead.
 
-The scary part wasn't the outages themselves — it was that *nobody
-knew the box was down* until people walked into the office at 9am
-and found nothing working. Then the chain would start: whoever
-noticed called the manager, manager called a friend who happened to
-be a mid-level engineer at another company, that friend SSHed in out
-of goodwill and restarted everything by hand. Up to 30 minutes of
-every workday was burned on this routine before the team could even
-begin. The company was bleeding money the whole time the chain was
-running.
+The scary part wasn't the outages themselves — it was that *the only
+way to know whether the box was alive was to log in and check by
+hand*. The office opened at 7am, so they settled into a daily 6am
+ritual: somebody had to connect from home an hour before the doors
+unlocked, just to verify the CRM was still up. The ritual itself
+became the new problem — someone always had to be the early-rising
+server-babysitter, every day including weekends. And on the
+mornings when it wasn't alive, the chain would start: that person
+called the manager, manager called a friend at another company who
+happened to be a mid-level engineer, that friend SSHed in out of
+goodwill and restarted everything by hand. Up to 30 minutes of
+every workday was burned on this routine before the team could
+even begin. The company was bleeding money the whole time the
+chain was running.
 
 They asked me for a solution with one hard constraint: no extra
 servers, no SaaS subscriptions, no recurring costs, nothing new to

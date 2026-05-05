@@ -42,25 +42,21 @@ Most server monitors page you. PanicMode pages you _and_ buys you 60 seconds to 
 
 ## The Story
 
-A small dev shop I know was losing about 30 minutes of work every morning for a week. One VPS ran everything. Juniors wrote most of the server code. There was no on-call rotation.
+A small dev shop I know was getting hit with DDoS attacks for a week straight. Their one production VPS would buckle somewhere in the middle of the night, and the outage itself wasn't even the scariest part. The scary part was that **nobody knew the box was down** until the first person walked into the office at nine in the morning, opened a laptop, and discovered that nothing worked.
 
-Two failure modes were grinding through them:
+Then the chain would start: whoever noticed called the manager, the manager called a friend who happened to be a mid-level engineer somewhere else, that friend SSHed in out of goodwill and restarted everything by hand. Up to thirty minutes of every workday was burned on this routine before the team could actually begin working. The company was bleeding money the whole time the chain was running.
 
-1. A junior pushed a regression late at night. The server hung at 2am. Nobody found out until the first person walked in at 9am, saw the website was down, called the manager, who called a mid-level engineer, who SSHed in and manually restarted everything.
-2. Botnets brute-forced SSH or flooded the box. Same outcome, different cause.
+The shop also had juniors writing most of the server code. Whenever one of them pushed a small mistake, it triggered the same chain — same nine-AM discovery, same phone tree, same friend logging in to fix it manually. Mistakes that should have cost five minutes routinely cost the whole company an hour of operation.
 
-Two compounding problems on top of each other:
+They asked me to find a real solution. PanicMode is what came out of it — three things, in this order of priority:
 
-- **Hours of downtime nobody knew about.** Lost work, missed calls, inbound calls *from* clients asking why the website was dead.
-- **By the time the engineer logged in, the restart cycle had wiped any in-memory state.** They were debugging blind every single time.
+1. **Get a human onto the box the instant something breaks** — without paying for a SaaS uptime monitor and without routing alerts through any third-party server. Telegram is already in everyone's pocket; the box itself sends the message, nobody else is in the loop, and it costs nothing recurring.
 
-They tried `fail2ban` + `monit` + a Telegram bot stitched together. It worked badly. After the third "thanks but it broke again," I sat down and built PanicMode — a single binary with three priorities, in this order:
+2. **Auto-handle the obvious problems**, so the human doesn't even have to be the first response. SSH-flood DDoS gets iptables-banned at the first round of failures. Runaway processes get SIGSTOP'd before the cascade brings down the whole box.
 
-1. **Page a human immediately**, on a channel they already read, without depending on a third-party uptime monitor or paying for a SaaS.
-2. **Auto-handle the obvious stuff** — SSH brute-forcers get banned, runaway processes get suspended before the OOM killer triggers a cascade.
-3. **Freeze the broken state instead of killing it.** `SIGSTOP` keeps the offending process suspended in memory, with all its logs and stack intact. The engineer logs in to a frozen-in-place crime scene, not a clean server that's already restarted and lost its evidence.
+3. **Freeze the broken state instead of killing it.** This is the part I'm most proud of. When something goes wrong, `SIGSTOP` keeps the offending process suspended exactly where it was — memory, open file descriptors, in-flight syscalls, all paused mid-step. The engineer logs in not to a clean restarted server with no clues, but to a frozen-in-place crime scene with the evidence intact. The original failure usually didn't get a chance to flush its logs to disk before the restart cycle would have wiped them; the freeze keeps everything in RAM, available for whoever shows up to debug.
 
-That third one is the part I'm most proud of. Most of the time the engineer figures out *what went wrong* before they have to figure out *how to bring it back up* — and that's the difference between a 5-minute fix and a 4-hour incident.
+That last point is the difference between a 5-minute fix and a 4-hour incident.
 
 ---
 

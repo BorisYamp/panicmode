@@ -29,49 +29,57 @@ Backup variants if this one doesn't feel right on the day:
 ```
 Hi HN,
 
-I'm Boris. I built PanicMode to solve a problem I kept watching small
-dev shops hit: when a server fails, the restart cycle destroys the
-evidence before anyone can debug it. systemd restarts the service,
-the OOM killer reclaims memory, the operator logs in to a clean box
-that has no clue what just happened.
+I'm Boris. I built PanicMode to solve a specific problem I watched
+a friend's company hit, and which I think a lot of small ops teams
+hit too: when something on the server goes sideways, the restart
+cycle that brings it back online destroys the evidence before anyone
+can debug what happened. systemd restarts the service, the OOM
+killer reclaims memory, the engineer who finally SSHes in to look
+sees a clean box that has no idea what it was doing wrong an hour
+ago.
 
-So PanicMode does the opposite. When something goes sideways it
-SIGSTOPs the offender — the broken process stays suspended in memory
-with all its state, logs, and stack intact. The engineer logs in to
-a frozen-in-place crime scene, not a clean server that already lost
-its clues.
+So PanicMode does the opposite. When something goes wrong, instead
+of restarting the offender, it SIGSTOPs it. The broken process stays
+suspended in memory exactly where it was — its open file descriptors,
+its memory, its in-flight syscalls, all paused mid-step. The engineer
+logs in to a frozen-in-place crime scene, not a clean server that
+already lost its clues.
 
 The story it grew out of:
 
-A small dev shop I know was losing ~30 minutes of work every morning
-for a week. One VPS, juniors writing most of the server code, no
-on-call rotation. Two failure modes were grinding through them:
+A small dev shop a friend works at was getting hit with DDoS attacks
+for a week straight. The actual outage wasn't the scariest part — the
+scary part was that *nobody knew the box was down* until people walked
+into the office at 9am and found nothing working. Then the chain would
+start: whoever noticed called the manager, manager called a friend who
+happened to be a mid-level engineer at another company, that friend
+SSHed in out of goodwill and restarted everything by hand. Up to
+30 minutes of every workday went to this routine before the team could
+even begin. The company was bleeding money the whole time the chain was
+running.
 
-1. A junior pushed a regression late at night. Server hung at 2am.
-   Nobody found out until the first person walked in at 9am, saw the
-   website down, called the manager, who called a mid-level engineer,
-   who SSHed in and manually restarted everything.
-2. Botnets brute-forced SSH or flooded the box. Same outcome.
+The shop also had juniors writing most of the server code. Every time
+one of them shipped a small mistake, the same chain played out — same
+9am discovery, same phone tree, same friend, same wait. Mistakes that
+should have been a 5-minute fix were costing the whole company an hour
+of operation.
 
-Two problems compounding:
+They asked me for a real solution. PanicMode is what came out of it —
+three things in priority order:
 
-- Hours of downtime nobody knew about. Lost work, calls *from*
-  clients asking why the website was dead.
-- By the time the engineer logged in, the restart had wiped any
-  in-memory state. Debugging blind every time.
-
-They tried fail2ban + monit + a Telegram bot stitched together. It
-worked badly. After the third "thanks but it broke again" I sat down
-and built PanicMode — a single binary with three priorities:
-
-1. Page a human immediately on a channel they already read (Telegram
-   by default — no SaaS uptime monitor, no third-party server, no
-   monthly bill).
-2. Auto-handle the obvious stuff — SSH brute-forcers get
-   iptables-banned, runaway memory hogs get SIGSTOP'd before the OOM
-   killer triggers a cascade.
-3. Freeze, don't kill. The crime-scene point above. This is the bit
-   I'm most proud of.
+1. Get a human onto the box the instant something breaks, without
+   paying for a SaaS uptime monitor and without routing alerts
+   through anyone else's server. Telegram by default — already in
+   everyone's pocket, instant, free.
+2. Auto-handle the obvious stuff so the human doesn't have to be
+   the first responder. SSH-flood DDoS gets iptables-banned at the
+   first round of failures. Runaway processes get SIGSTOP'd before
+   the cascade brings everything down.
+3. Freeze, don't kill. The crime-scene point above. The freeze
+   matters specifically because the original failure usually doesn't
+   get a chance to flush its logs to disk before a restart cycle
+   would wipe them — keeping the process suspended in RAM keeps the
+   evidence accessible to whoever shows up.
 
 Some specifics worth flagging up front:
 

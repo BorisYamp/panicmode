@@ -25,7 +25,7 @@ Most server monitors page you. PanicMode pages you _and_ buys you 60 seconds to 
 
 **Status:** v0.1.1, Linux-only, single binary + sample systemd unit. Hardened across 4 review rounds before tag — see [CHANGELOG](CHANGELOG.md) for the autopsy.
 
-**On a live VPS (5+ days, alongside fail2ban):** 98 unique source IPs blocked, 7,259 SSH brute-force attempts repelled, ~15 MB RAM, ~1 % CPU. Zero crashes, zero false positives. Full ASN/country breakdown in [`docs/threat-stats.md`](docs/threat-stats.md).
+**On a live VPS (7+ days, alongside fail2ban):** 115 unique source IPs blocked over 1,790 ban events, 13,191 SSH brute-force attempts repelled, ~27 MB RAM, ~1 % CPU. Zero crashes, zero false positives. Full ASN/country breakdown in [`docs/threat-stats.md`](docs/threat-stats.md).
 
 ---
 

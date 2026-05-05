@@ -262,16 +262,22 @@ no bugs. What did you miss?"
 > universally-recognised threat, not because that's all PanicMode
 > does.
 
-### "0 false positives in 5 days — convince me."
+### "0 false positives in 7 days — convince me."
 
-> 5 days is short, you're right. The "0 FPs" claim is specifically
-> about ban_ip and freeze_top_process actions: nothing innocent
-> got banned, nothing innocent got frozen. But the *alert* count
-> includes some "high CPU" warnings that turned out to be normal
-> nightly cron jobs (logrotate, fstrim, etc). With longer running
-> time we'll get a clearer picture. v0.1 stat is "no actions
-> against innocents during the soak"; the alert noise floor is
-> tunable per deployment.
+> A week is short, you're right. The "0 FPs" claim is specifically
+> about the *acting* paths — block_ip and freeze_top_process. Nothing
+> innocent got banned, nothing innocent got frozen during the window.
+>
+> Alert noise is a separate story: there were a couple of "high CPU"
+> warnings that turned out to be normal background tasks (Ubuntu's
+> daily check-new-release apt poll briefly hit 80.6%, logrotate, etc).
+> Those are *warnings*, action set is `[alert_warning]` only — no
+> freeze, no ban — so we're not destroying anything innocent. The
+> noise floor is tunable per deployment by raising the warning
+> threshold or routing warnings to a separate channel.
+>
+> With longer running time we'll get a clearer picture of how the
+> claim holds up under more diverse workloads.
 
 ### "I want PanicMode but configurable from a UI, not YAML."
 

@@ -1,13 +1,12 @@
-# Threat statistics — production VPS, days 1-5
+# Threat statistics — production VPS, days 1-7
 
 Aggregated from a Contabo VPS in France running PanicMode v0.1.x alongside
-`fail2ban` for the first five days after deployment. SSH on port 22, no
-other ports exposed publicly. No advertised activity, no sites, no
-mentions of the IP anywhere — purely passive exposure to the IPv4
-background noise.
+`fail2ban`. SSH on port 22, no other ports exposed publicly. No advertised
+activity, no sites, no mentions of the IP anywhere — purely passive
+exposure to the IPv4 background noise.
 
-These numbers are from the 28 April → 3 May window, the same period
-referenced in the README's status block.
+These numbers cover the seven-day window from the deployment date through
+the launch period.
 
 ---
 
@@ -15,17 +14,24 @@ referenced in the README's status block.
 
 | | |
 |---|---|
-| Unique source IPs blocked | **98** |
-| Total ban events | **946** (same IPs returned and were re-banned after `bantime` expired) |
-| Total SSH brute-force attempts | **7,259** |
-| Source ASNs | **37** |
+| Unique source IPs blocked | **115** |
+| Total ban events | **1,790** (same IPs returned and were re-banned after `bantime` expired) |
+| Total SSH brute-force attempts | **13,191** |
+| Source ASNs | **42** |
 | Source countries | **19** |
 | False positives | **0** |
 | Crashes | **0** |
+| PanicMode footprint | ~27 MB RAM, ~1 % CPU steady |
 
-The 946-vs-98 ratio (≈ 9.6 ban events per unique IP) shows the
+The 1,790-vs-115 ratio (≈ 15.6 ban events per unique IP) shows the
 "persistent retry" pattern — most attackers came back multiple times
-across the window, often within an hour of `bantime` expiring.
+across the window, often within an hour of `bantime` expiring. The
+ratio grew over time (it was ~9.6 after 5 days) because the same set of
+IPs keeps respawning, while genuinely-new IPs only trickle in.
+
+PanicMode's memory grew from ~15 MB on day 1 to ~27 MB on day 7 — the
+growth is the in-memory state for the accumulating block list and is
+linear in the number of blocked IPs, not in the daily attack volume.
 
 ---
 
@@ -33,16 +39,16 @@ across the window, often within an hour of `bantime` expiring.
 
 | Bans | ASN | Country (allocated) | Operator |
 |---:|---|---|---|
-|  23 | AS47890 | RO | UNMANAGED-DEDICATED-SERVERS (UK-registered, RO-hosted) |
-|   8 | AS24086 | VN | Viettel Corporation (Vietnamese state telecom) |
+|  24 | AS47890 | RO | UNMANAGED-DEDICATED-SERVERS (UK-registered, RO-hosted) |
+|  10 | AS24086 | VN | Viettel Corporation (Vietnamese state telecom) |
+|   6 | AS7552  | VN | Viettel Group AP |
 |   6 | AS48090 | RO | DMZHOST (UK-registered, RO-hosted) |
-|   4 | AS14061 | US | DigitalOcean |
-|   4 | AS7552  | VN | Viettel Group AP |
-|   3 | AS4837  | CN | China Unicom |
+|   5 | AS14061 | US | DigitalOcean |
+|   4 | AS4837  | CN | China Unicom |
+|   4 | AS16276 | FR | OVH |
 |   3 | AS38365 | CN | Baidu |
-|   3 | AS16276 | FR | OVH |
-|   3 | AS51396 | DE | PFCLOUD |
-|   2 | AS4766  | KR | Korea Telecom |
+|   3 | AS23724 | CN | China Telecom IDC (Beijing) |
+|   3 | AS4766  | KR | Korea Telecom |
 
 The pattern is the standard 2026 SSH-brute-force shape:
 
@@ -56,16 +62,16 @@ The pattern is the standard 2026 SSH-brute-force shape:
 
 | IPs | Country |
 |---:|---|
-| 29 | 🇷🇴 Romania |
-| 18 | 🇨🇳 China |
-| 12 | 🇻🇳 Vietnam |
-|  9 | 🇺🇸 United States |
-|  7 | 🇩🇪 Germany |
+| 30 | 🇷🇴 Romania |
+| 22 | 🇨🇳 China |
+| 16 | 🇻🇳 Vietnam |
+| 11 | 🇺🇸 United States |
+|  9 | 🇩🇪 Germany |
 |  5 | 🇧🇬 Bulgaria |
-|  3 | 🇫🇷 France |
-|  2 | 🇳🇱 Netherlands |
-|  2 | 🇰🇷 South Korea |
+|  4 | 🇫🇷 France |
+|  3 | 🇰🇷 South Korea |
 |  2 | 🇮🇳 India |
+|  2 | 🇦🇪 United Arab Emirates |
 
 Romania at the top is the bulletproof-hosting effect — it's where most
 of the AS47890 / AS48090 IPs physically live, even though those ASes are

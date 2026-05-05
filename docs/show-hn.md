@@ -29,57 +29,68 @@ Backup variants if this one doesn't feel right on the day:
 ```
 Hi HN,
 
-I'm Boris. I built PanicMode to solve a specific problem I watched
-a friend's company hit, and which I think a lot of small ops teams
-hit too: when something on the server goes sideways, the restart
-cycle that brings it back online destroys the evidence before anyone
-can debug what happened. systemd restarts the service, the OOM
-killer reclaims memory, the engineer who finally SSHes in to look
-sees a clean box that has no idea what it was doing wrong an hour
-ago.
+I'm Boris. I built PanicMode for a problem I kept watching small dev
+shops hit: when one process on a Linux server starts misbehaving, the
+typical restart-on-failure cycle does two bad things at once — it
+takes the whole box offline for the duration, and it wipes the
+in-flight evidence before anyone can debug what happened.
 
-So PanicMode does the opposite. When something goes wrong, instead
-of restarting the offender, it SIGSTOPs it. The broken process stays
-suspended in memory exactly where it was — its open file descriptors,
-its memory, its in-flight syscalls, all paused mid-step. The engineer
-logs in to a frozen-in-place crime scene, not a clean server that
-already lost its clues.
+PanicMode does the opposite. It SIGSTOPs only the offending process.
+The rest of the box keeps serving everyone else, and the broken
+process stays suspended in memory with all its state, logs, and file
+descriptors intact. The engineer logs in not to a clean restarted box
+that already lost its clues, but to a server that's still serving —
+with the broken piece frozen in place exactly where it failed.
 
 The story it grew out of:
 
-A small dev shop a friend works at was getting hit with DDoS attacks
-for a week straight. The actual outage wasn't the scariest part — the
-scary part was that *nobody knew the box was down* until people walked
-into the office at 9am and found nothing working. Then the chain would
-start: whoever noticed called the manager, manager called a friend who
-happened to be a mid-level engineer at another company, that friend
-SSHed in out of goodwill and restarted everything by hand. Up to
-30 minutes of every workday went to this routine before the team could
-even begin. The company was bleeding money the whole time the chain was
+A small dev shop I know was losing ~30 minutes of work every morning
+for a week. One VPS ran their internal CRM, code mostly written by
+juniors, no on-call rotation. Two failure modes were grinding through
+them, alternating night by night:
+
+1. The CRM kept getting hit by DDoS probes and brute-force traffic.
+   Their only defence was a country-level firewall — it helped a
+   little, but determined attackers got around it routinely.
+2. The juniors would push small mistakes that the already-stressed
+   box couldn't absorb. A bug that should have been a 5-minute fix
+   would knock everything over instead.
+
+The scary part wasn't the outages themselves — it was that *nobody
+knew the box was down* until people walked into the office at 9am
+and found nothing working. Then the chain would start: whoever
+noticed called the manager, manager called a friend who happened to
+be a mid-level engineer at another company, that friend SSHed in out
+of goodwill and restarted everything by hand. Up to 30 minutes of
+every workday was burned on this routine before the team could even
+begin. The company was bleeding money the whole time the chain was
 running.
 
-The shop also had juniors writing most of the server code. Every time
-one of them shipped a small mistake, the same chain played out — same
-9am discovery, same phone tree, same friend, same wait. Mistakes that
-should have been a 5-minute fix were costing the whole company an hour
-of operation.
+They asked me for a solution with one hard constraint: no extra
+servers, no SaaS subscriptions, no recurring costs, nothing new to
+secure. Whatever it was had to run on the same VPS they already paid
+for, in the same single process. PanicMode is what came out of it —
+three priorities in this order:
 
-They asked me for a real solution. PanicMode is what came out of it —
-three things in priority order:
-
-1. Get a human onto the box the instant something breaks, without
-   paying for a SaaS uptime monitor and without routing alerts
-   through anyone else's server. Telegram by default — already in
-   everyone's pocket, instant, free.
-2. Auto-handle the obvious stuff so the human doesn't have to be
-   the first responder. SSH-flood DDoS gets iptables-banned at the
-   first round of failures. Runaway processes get SIGSTOP'd before
-   the cascade brings everything down.
-3. Freeze, don't kill. The crime-scene point above. The freeze
-   matters specifically because the original failure usually doesn't
-   get a chance to flush its logs to disk before a restart cycle
-   would wipe them — keeping the process suspended in RAM keeps the
-   evidence accessible to whoever shows up.
+1. Get a human onto the box the moment something breaks, without
+   paying for an uptime monitor and without routing alerts through
+   anyone else's infrastructure. Telegram is already in everyone's
+   pocket — the box sends the message itself, nobody else in the
+   loop, nothing recurring to pay for.
+2. Auto-handle the obvious stuff so the human doesn't have to be the
+   first responder. SSH brute-force / DDoS sources get
+   iptables-banned at the first round of failures.
+3. Freeze the broken process, not kill it. This is the bit I'm most
+   proud of, and it does two things at once:
+   - The rest of the box stays alive. A runaway process gets
+     SIGSTOP'd before it eats all the CPU/RAM and takes the whole
+     server down with it. The team can deal with the incident
+     during business hours instead of at 2am.
+   - The logs survive. When a process crashes hard, its in-flight
+     log buffers usually don't get a chance to flush to disk before
+     the restart cycle wipes everything. With SIGSTOP, the process
+     stays in memory exactly where it was — frozen-in-place crime
+     scene, all evidence intact.
 
 Some specifics worth flagging up front:
 

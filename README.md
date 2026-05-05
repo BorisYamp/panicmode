@@ -42,21 +42,26 @@ Most server monitors page you. PanicMode pages you _and_ buys you 60 seconds to 
 
 ## The Story
 
-A small dev shop I know was getting hit with DDoS attacks for a week straight. Their one production VPS would buckle somewhere in the middle of the night, and the outage itself wasn't even the scariest part. The scary part was that **nobody knew the box was down** until the first person walked into the office at nine in the morning, opened a laptop, and discovered that nothing worked.
+A small dev shop I know was losing about 30 minutes of work every morning for a week. One VPS ran their internal CRM — code mostly written by juniors, no on-call rotation.
 
-Then the chain would start: whoever noticed called the manager, the manager called a friend who happened to be a mid-level engineer somewhere else, that friend SSHed in out of goodwill and restarted everything by hand. Up to thirty minutes of every workday was burned on this routine before the team could actually begin working. The company was bleeding money the whole time the chain was running.
+Two failure modes were grinding through them, alternating night by night:
 
-The shop also had juniors writing most of the server code. Whenever one of them pushed a small mistake, it triggered the same chain — same nine-AM discovery, same phone tree, same friend logging in to fix it manually. Mistakes that should have cost five minutes routinely cost the whole company an hour of operation.
+1. The CRM kept getting hit by DDoS probes and brute-force traffic. Their only defence was a country-level firewall — it helped a little, but determined attackers routinely got around it.
+2. The juniors would push small mistakes that the already-stressed box couldn't absorb. A bug that should have been a 5-minute fix would knock everything over instead.
 
-They asked me to find a real solution. PanicMode is what came out of it — three things, in this order of priority:
+The scary part wasn't that the server kept going down. It was that **nobody knew it was down** until the first person walked in at 9am, opened a laptop, and found nothing working. Then the chain would start: whoever noticed called the manager, the manager called a friend who happened to be a mid-level engineer somewhere else, that friend SSHed in out of goodwill and restarted everything by hand. Up to 30 minutes of every workday was burned on this routine before the team could even begin. The company was losing money the whole time the chain was running.
 
-1. **Get a human onto the box the instant something breaks** — without paying for a SaaS uptime monitor and without routing alerts through any third-party server. Telegram is already in everyone's pocket; the box itself sends the message, nobody else is in the loop, and it costs nothing recurring.
+They asked me for a solution with one hard constraint: **no extra servers, no SaaS subscriptions, no recurring costs, nothing new to secure.** Whatever it was had to run on the same VPS they already paid for, in the same single process. PanicMode is what came out of it — three priorities, in this order:
 
-2. **Auto-handle the obvious problems**, so the human doesn't even have to be the first response. SSH-flood DDoS gets iptables-banned at the first round of failures. Runaway processes get SIGSTOP'd before the cascade brings down the whole box.
+1. **Get a human onto the box the moment something breaks** — without paying for an uptime monitor and without routing alerts through anyone else's infrastructure. Telegram is already in everyone's pocket; the box sends the message itself, nobody else is in the loop, nothing recurring to pay for.
 
-3. **Freeze the broken state instead of killing it.** This is the part I'm most proud of. When something goes wrong, `SIGSTOP` keeps the offending process suspended exactly where it was — memory, open file descriptors, in-flight syscalls, all paused mid-step. The engineer logs in not to a clean restarted server with no clues, but to a frozen-in-place crime scene with the evidence intact. The original failure usually didn't get a chance to flush its logs to disk before the restart cycle would have wiped them; the freeze keeps everything in RAM, available for whoever shows up to debug.
+2. **Auto-handle the obvious stuff** so the human doesn't have to be the first responder. SSH brute-force / DDoS sources get iptables-banned at the first round of failures.
 
-That last point is the difference between a 5-minute fix and a 4-hour incident.
+3. **Freeze the broken process, don't kill it.** This is the part I'm most proud of, and it does two things at once:
+   - **The rest of the box stays alive.** A runaway process gets `SIGSTOP`'d before it eats all the CPU and RAM and takes the whole server down with it. The CRM keeps responding for everyone else; the team can deal with the incident during business hours instead of at 2am.
+   - **The logs survive.** When a process crashes hard, its in-flight log buffers usually don't get a chance to flush to disk before the restart cycle wipes everything. With `SIGSTOP`, the process stays in memory exactly where it was — logs, stack, file descriptors all intact. The engineer logs in to a frozen-in-place crime scene, not a clean restarted box that already lost its clues.
+
+That last point — both halves of it — is the difference between a 5-minute fix and a 4-hour incident.
 
 ---
 

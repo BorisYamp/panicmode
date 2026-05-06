@@ -87,8 +87,9 @@ Some other things worth flagging:
 
 Repo: https://github.com/BorisYamp/panicmode
 v0.1.1 release with stripped Linux binary: https://github.com/BorisYamp/panicmode/releases/tag/v0.1.1
-Live VPS stats during the test window (115 unique source IPs
-blocked, 19 countries, 42 ASNs, methodology included): docs/threat-stats.md
+Live VPS stats during the test window (122 unique attacker IPs in
+permanent blacklist, 19 countries, 42 ASNs, 17,889 brute-force
+attempts repelled, methodology included): docs/threat-stats.md
 
 Happy to discuss the design, the bugs, or anything else. First
 real Rust shipped to production, so I'd take "you should have

@@ -25,7 +25,7 @@ Most server monitors just page you. PanicMode does two things they don't: it kee
 
 **Status:** v0.1.1, Linux-only, single binary + sample systemd unit. Hardened across 4 review rounds before tag — see [CHANGELOG](CHANGELOG.md) for the autopsy.
 
-**On a live VPS (7+ days, alongside fail2ban):** 115 unique source IPs blocked over 1,790 ban events, 13,191 SSH brute-force attempts repelled, ~27 MB RAM, ~1 % CPU. Zero crashes, zero false positives. Full ASN/country breakdown in [`docs/threat-stats.md`](docs/threat-stats.md).
+**On a live VPS (8+ days, PanicMode standalone):** **122 unique attacker IPs in the permanent blacklist**, 17,889 SSH brute-force attempts repelled, ~27 MB RAM, ~1 % CPU. Zero crashes, zero false positives. Full ASN/country breakdown in [`docs/threat-stats.md`](docs/threat-stats.md).
 
 ---
 
@@ -72,7 +72,7 @@ Both philosophies are valid. Pick the one that matches the temperament of your t
 
 | Tool | What it does well | Where PanicMode trades differently |
 |---|---|---|
-| **fail2ban** | SSH brute-force banning, mature, battle-tested | fail2ban does one thing very well. PanicMode goes wider — bans IPs *and* freezes runaway processes, takes snapshots, and routes alerts to Telegram / Discord / ntfy / email / phone, all in one binary and one YAML. They also coexist happily; PanicMode runs alongside fail2ban on the production VPS the stats above came from. |
+| **fail2ban** | SSH brute-force banning, mature, battle-tested | fail2ban does one thing very well. PanicMode goes wider — bans IPs *and* freezes runaway processes, takes snapshots, and routes alerts to Telegram / Discord / ntfy / email / phone, all in one binary and one YAML. They coexist fine if you want defense-in-depth; PanicMode alone covers the same SSH job with **permanent** bans instead of fail2ban's 10-minute cycle. |
 | **monit** | Process restart, simple, battle-tested | Same shape as PanicMode but C-era ergonomics. PanicMode is async-Rust, parses journald with a kernel-attributed unit filter (auth log can't be `logger`-spoofed), and ships modern alerting out of the box. |
 | **Wazuh** | Full SIEM, enterprise-grade audit and compliance | Wazuh wants Elasticsearch + a manager + agents per host; PanicMode is one ~9 MB binary, one YAML, one systemd unit. Different decision about how much infrastructure you want on top of your infrastructure. |
 | **Falco (CNCF)** | Kernel-level syscall audit, exceptional visibility, deep Kubernetes integration | Different temperament rather than different scope. Falco records and emits — every syscall, every container event — and lets a separate responder (Falcosidekick + a controller, or your own) decide what to do. PanicMode watches less and acts immediately, in-process. Falco gives you everything to look at; PanicMode tries to mean less to look at. |

@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   demo recording: stress-ng workers were correctly frozen, then htop at
   ~6% CPU was caught in the next tick because the previous floor was a
   hardcoded 1.0%.
+- Telegram / Discord / ntfy / email / Twilio alerts now include
+  `incident.metadata.details` on a separate line — for SSH brute-force
+  incidents this means the offending IPs end up in the message instead
+  of being silently dropped between the detector and the dispatcher.
+  Capped at 1500 chars so a very-noisy incident (hundreds of IPs)
+  can't blow past Telegram's 4096-char message ceiling.
 
 ### Added
 

@@ -55,14 +55,17 @@ What it isn't:
 - Not Windows. Linux only. Uses journald + iptables. Not
   containers either — design is host-level.
 
-Production-tested for 7 days on a Contabo VPS in France.
-Stack of fail2ban + PanicMode caught 115 unique source IPs across
-19 countries / 42 ASNs (top: Romania, China, Vietnam — pattern
-is the standard 2026 SSH brute-force shape: bulletproof hosting
-+ compromised cloud + compromised consumer). 1,790 ban events,
-13,191 brute-force attempts repelled. PanicMode itself ate
-~27 MB RAM and ~1% CPU. Zero false positives, zero crashes
-during the window.
+Production-tested for 8 days on a Contabo VPS in France.
+Started with fail2ban + PanicMode as defense-in-depth, then
+dropped fail2ban after PanicMode proved it handles SSH on its
+own (with the upside of permanent bans instead of fail2ban's
+10-min cycle). Currently: 122 unique attacker IPs in the
+permanent blacklist across 19 countries / 42 ASNs (top:
+Romania, China, Vietnam — standard 2026 brute-force shape:
+bulletproof hosting + compromised cloud + compromised
+consumer). 17,889 brute-force attempts repelled. PanicMode
+itself ate ~27 MB RAM and ~1% CPU. Zero false positives,
+zero crashes during the window.
 
 Repo: https://github.com/BorisYamp/panicmode
 Pre-built x86_64 Linux binary: https://github.com/BorisYamp/panicmode/releases/tag/v0.1.1

@@ -298,6 +298,30 @@ impl IncidentHandler {
     // Alert actions: rate limiting + actual dispatch via alert_tx
     // -------------------------------------------------------------------------
 
+    /// Build the human-facing alert text from an incident.
+    ///
+    /// Includes `metadata.details` (which carries the offending IPs for
+    /// auth-failure incidents, contributing processes for CPU/memory
+    /// incidents, etc) on its own line. Truncates very long details so
+    /// the message fits in Telegram's 4096-char window after channel
+    /// formatting and the server-label suffix.
+    fn build_alert_text(incident: &Incident) -> String {
+        const MAX_DETAILS_LEN: usize = 1500;
+        let mut text = format!("{}: {}", incident.name, incident.description);
+        let details = &incident.metadata.details;
+        if !details.is_empty() {
+            text.push('\n');
+            if details.chars().count() > MAX_DETAILS_LEN {
+                let truncated: String = details.chars().take(MAX_DETAILS_LEN).collect();
+                text.push_str(&truncated);
+                text.push('…');
+            } else {
+                text.push_str(details);
+            }
+        }
+        text
+    }
+
     async fn execute_alerts(&self, alerts: Vec<ActionType>, incident: &Incident) {
         if alerts.is_empty() {
             return;
@@ -313,16 +337,14 @@ impl IncidentHandler {
                         .await;
 
                     if should_alert {
-                        let msg = AlertMessage::critical(format!(
-                            "{}: {}",
-                            incident.name, incident.description
-                        ));
+                        let alert_text = Self::build_alert_text(incident);
+                        let msg = AlertMessage::critical(alert_text.clone());
                         if let Err(_) = self.alert_tx.try_send(msg) {
                             // Channel full — high-priority alerts are already queued.
                             // Write directly to stderr: works even when the system is degraded.
                             eprintln!(
-                                "[PANICMODE CRITICAL - channel full] {}: {}",
-                                incident.name, incident.description
+                                "[PANICMODE CRITICAL - channel full] {}",
+                                alert_text
                             );
                         }
 
@@ -343,10 +365,7 @@ impl IncidentHandler {
                         .await;
 
                     if should_alert {
-                        let msg = AlertMessage::warning(format!(
-                            "{}: {}",
-                            incident.name, incident.description
-                        ));
+                        let msg = AlertMessage::warning(Self::build_alert_text(incident));
                         if let Err(e) = self.alert_tx.try_send(msg) {
                             tracing::error!("Failed to queue warning alert: {}", e);
                         }
@@ -361,10 +380,7 @@ impl IncidentHandler {
 
                 ActionType::AlertInfo => {
                     // Info alerts are not rate-limited — they are non-critical
-                    let msg = AlertMessage::info(format!(
-                        "{}: {}",
-                        incident.name, incident.description
-                    ));
+                    let msg = AlertMessage::info(Self::build_alert_text(incident));
                     if let Err(e) = self.alert_tx.try_send(msg) {
                         tracing::error!("Failed to queue info alert: {}", e);
                     }

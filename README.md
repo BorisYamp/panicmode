@@ -23,7 +23,7 @@
 
 Most server monitors just page you. PanicMode does two things they don't: it keeps the rest of the box running through a broken process or an active attack, and it freezes the offender in place so you can investigate what actually failed when you have the time — not when you're being paged at 2am. Built for solo operators and small teams who run their own boxes and want active defence without standing up a Wazuh/ELK stack.
 
-**Status:** v0.1.1, Linux-only, single binary + sample systemd unit. Hardened across 4 review rounds before tag — see [CHANGELOG](CHANGELOG.md) for the autopsy.
+**Status:** v0.1.2, Linux-only, single binary + sample systemd unit. Hardened across 4 review rounds before tag — see [CHANGELOG](CHANGELOG.md) for the autopsy.
 
 **On a live VPS (8+ days, PanicMode standalone):** **122 unique attacker IPs in the permanent blacklist**, 17,889 SSH brute-force attempts repelled, ~27 MB RAM, ~1 % CPU. Zero crashes, zero false positives. Full ASN/country breakdown in [`docs/threat-stats.md`](docs/threat-stats.md).
 
@@ -89,7 +89,7 @@ PanicMode and these tools aren't strictly competing — most coexist fine. The t
 x86_64 Linux, ~9 MB total. Verify the SHA256SUMS if you care.
 
 ```bash
-curl -L https://github.com/BorisYamp/panicmode/releases/download/v0.1.1/panicmode-v0.1.1-x86_64-linux.tar.gz | tar xz
+curl -L https://github.com/BorisYamp/panicmode/releases/download/v0.1.2/panicmode-v0.1.2-x86_64-linux.tar.gz | tar xz
 sudo mv panicmode panicmode-ctl /usr/local/bin/
 ```
 

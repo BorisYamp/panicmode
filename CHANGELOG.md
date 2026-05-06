@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.1.2] — 2026-05-06
+
+### Fixed
+
+- Telegram / Discord / ntfy / email / Twilio alerts now include
+  `incident.metadata.details` on a separate line — for SSH brute-force
+  incidents this means the offending IPs end up in the message instead
+  of being silently dropped between the detector and the dispatcher.
+  Capped at 1500 chars so a very-noisy incident (hundreds of IPs)
+  can't blow past Telegram's 4096-char message ceiling.
+
+### Operational
+
+- Production VPS dropped fail2ban after PanicMode's `auth_failures`
+  monitor was tuned to 3 fails / 10 min and demonstrated it caught
+  the same attackers with permanent bans instead of the 10-min cycle.
+- 122 unique attacker IPs in the permanent blacklist at the time of
+  this tag (was 30 at v0.1.1; jump from a one-time backfill of
+  fail2ban's historic ban list plus PanicMode's own catches).
+
+## [0.1.1] — 2026-05-04
 
 ### Fixed
 
@@ -17,12 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   demo recording: stress-ng workers were correctly frozen, then htop at
   ~6% CPU was caught in the next tick because the previous floor was a
   hardcoded 1.0%.
-- Telegram / Discord / ntfy / email / Twilio alerts now include
-  `incident.metadata.details` on a separate line — for SSH brute-force
-  incidents this means the offending IPs end up in the message instead
-  of being silently dropped between the detector and the dispatcher.
-  Capped at 1500 chars so a very-noisy incident (hundreds of IPs)
-  can't blow past Telegram's 4096-char message ceiling.
 
 ### Added
 

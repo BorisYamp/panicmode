@@ -92,13 +92,15 @@ Some specifics worth flagging up front:
 - Single ~9 MB Rust binary, one YAML config, no daemon-of-daemons stack
 - v0.1.1, hardened across 4 review rounds before tag — 28 bugs found
   and fixed (CHANGELOG.md has the autopsy)
-- Live on a Contabo VPS for 7+ days at the time of release alongside
-  fail2ban — between them, 115 unique source IPs blocked over 1,790
-  ban events, 13,191 brute-force attempts repelled. Top sources:
-  Romania, China, Vietnam (full ASN/country breakdown in
-  docs/threat-stats.md with the methodology so anyone can reproduce).
-  PanicMode itself: ~27 MB RAM, ~1% CPU, zero crashes, zero false
-  positives.
+- Live on a Contabo VPS for 8+ days. Started with PanicMode +
+  fail2ban as defense-in-depth, then dropped fail2ban after PanicMode
+  proved it handles SSH brute-force on its own (with the upside of
+  permanent bans instead of fail2ban's 10-minute cycle). Currently:
+  122 unique attacker IPs in the permanent blacklist, 17,889
+  brute-force attempts repelled. Top sources Romania, China, Vietnam
+  (full ASN/country breakdown in docs/threat-stats.md with the
+  methodology so anyone can reproduce). PanicMode itself: ~27 MB RAM,
+  ~1% CPU, zero crashes, zero false positives.
 - Linux-only for now (journald + iptables); Windows/macOS not on the
   near roadmap
 

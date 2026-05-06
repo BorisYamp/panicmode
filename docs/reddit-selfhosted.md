@@ -39,10 +39,11 @@ Some honesty:
   hardening pass) and iptables.
 - v0.1.1, just shipped after 4 review rounds caught 28 bugs.
   CHANGELOG.md has the autopsy if you like that genre.
-- Live on a Contabo VPS for 7+ days alongside fail2ban: between
-  them 115 unique source IPs blocked over 1,790 ban events,
-  13,191 brute-force attempts repelled, zero false positives.
-  ~27 MB RAM, ~1% CPU steady.
+- Live on a Contabo VPS for 8+ days, currently standalone (started
+  with fail2ban as a second layer, dropped it once PanicMode proved
+  it handles SSH brute-force on its own). 122 unique attacker IPs
+  in the permanent blacklist, 17,889 brute-force attempts repelled,
+  zero false positives. ~27 MB RAM, ~1% CPU steady.
 - mass_freeze / kill_process actions are parsed but not yet
   implemented (daemon prints a warning at startup).
 - Two safety floors prevent it from accidentally freezing things

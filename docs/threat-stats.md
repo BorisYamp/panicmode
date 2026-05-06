@@ -1,12 +1,16 @@
-# Threat statistics — production VPS, days 1-7
+# Threat statistics — production VPS, days 1-8
 
-Aggregated from a Contabo VPS in France running PanicMode v0.1.x alongside
-`fail2ban`. SSH on port 22, no other ports exposed publicly. No advertised
-activity, no sites, no mentions of the IP anywhere — purely passive
-exposure to the IPv4 background noise.
+Aggregated from a Contabo VPS in France running PanicMode v0.1.x. SSH on
+port 22, no other ports exposed publicly. No advertised activity, no
+sites, no mentions of the IP anywhere — purely passive exposure to the
+IPv4 background noise.
 
-These numbers cover the seven-day window from the deployment date through
-the launch period.
+The first ~8 days the box ran PanicMode alongside `fail2ban` as
+defense-in-depth during early validation. Once PanicMode's
+auth_failures monitor was tuned to the same threshold as fail2ban
+(3 failures / 10 min) and demonstrated it caught the same attackers
+*and* banned them permanently instead of cycling, fail2ban was
+removed and PanicMode became the sole defender.
 
 ---
 
@@ -14,22 +18,24 @@ the launch period.
 
 | | |
 |---|---|
-| Unique source IPs blocked | **115** |
-| Total ban events | **1,790** (same IPs returned and were re-banned after `bantime` expired) |
-| Total SSH brute-force attempts | **13,191** |
+| Unique attacker IPs in permanent blacklist | **122** |
+| Total SSH brute-force attempts repelled | **17,889** |
 | Source ASNs | **42** |
 | Source countries | **19** |
 | False positives | **0** |
 | Crashes | **0** |
 | PanicMode footprint | ~27 MB RAM, ~1 % CPU steady |
 
-The 1,790-vs-115 ratio (≈ 15.6 ban events per unique IP) shows the
-"persistent retry" pattern — most attackers came back multiple times
-across the window, often within an hour of `bantime` expiring. The
-ratio grew over time (it was ~9.6 after 5 days) because the same set of
-IPs keeps respawning, while genuinely-new IPs only trickle in.
+There's deliberately no "ban events" count here — once an IP is
+permanently blocked, the kernel drops its packets at INPUT before they
+hit sshd, so there's nothing to count beyond the first ban. The earlier
+fail2ban-only days had a "ban events" stat (each cycle through the
+10-minute timeout counted) but that metric is meaningless for a
+permanent-ban model — and a worse signal anyway, since high event
+counts mostly mean the same handful of IPs kept coming back, not that
+the system was catching new attackers.
 
-PanicMode's memory grew from ~15 MB on day 1 to ~27 MB on day 7 — the
+PanicMode's memory grew from ~15 MB on day 1 to ~27 MB on day 8 — the
 growth is the in-memory state for the accumulating block list and is
 linear in the number of blocked IPs, not in the daily attack volume.
 

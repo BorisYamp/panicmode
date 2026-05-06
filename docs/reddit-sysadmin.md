@@ -7,7 +7,7 @@
 ## Title
 
 ```
-Released PanicMode v0.1.1 — fail2ban + monit + Telegram alerts in one Rust binary, with auto-mitigation
+Released PanicMode v0.1.2 — fail2ban + monit + Telegram alerts in one Rust binary, with auto-mitigation
 ```
 
 ## Body
@@ -68,7 +68,7 @@ itself ate ~27 MB RAM and ~1% CPU. Zero false positives,
 zero crashes during the window.
 
 Repo: https://github.com/BorisYamp/panicmode
-Pre-built x86_64 Linux binary: https://github.com/BorisYamp/panicmode/releases/tag/v0.1.1
+Pre-built x86_64 Linux binary: https://github.com/BorisYamp/panicmode/releases/tag/v0.1.2
 (no Rust toolchain needed; tarball with two binaries, ~4 MB)
 
 Known limitations honestly:

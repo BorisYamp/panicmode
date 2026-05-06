@@ -7,7 +7,7 @@
 ## Title
 
 ```
-[Show] PanicMode v0.1.1 — async-Rust Linux server protector (single 9 MB binary, ~27 MB RAM, 28 bugs caught in 4 hardening rounds)
+[Show] PanicMode v0.1.2 — async-Rust Linux server protector (single 9 MB binary, ~27 MB RAM, 28 bugs caught in 4 hardening rounds)
 ```
 
 ## Body
@@ -15,7 +15,7 @@
 ```
 Hey /r/rust,
 
-Shipping v0.1.1 of PanicMode — an active server protection daemon
+Shipping v0.1.2 of PanicMode — an active server protection daemon
 for Linux. Single binary, async Rust on top of Tokio, ~9 MB stripped,
 ~27 MB resident memory after a week of accumulated state (~15 MB on
 day 1; growth is the in-memory block list, linear in unique IPs).
@@ -86,7 +86,7 @@ Some other things worth flagging:
   collection.
 
 Repo: https://github.com/BorisYamp/panicmode
-v0.1.1 release with stripped Linux binary: https://github.com/BorisYamp/panicmode/releases/tag/v0.1.1
+v0.1.2 release with stripped Linux binary: https://github.com/BorisYamp/panicmode/releases/tag/v0.1.2
 Live VPS stats during the test window (122 unique attacker IPs in
 permanent blacklist, 19 countries, 42 ASNs, 17,889 brute-force
 attempts repelled, methodology included): docs/threat-stats.md

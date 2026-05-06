@@ -7,7 +7,7 @@
 ## Title
 
 ```
-PanicMode v0.1.1 — Linux server protector that auto-bans brute-forcers and freezes runaway processes (single Rust binary, MIT/Apache, no SaaS)
+PanicMode v0.1.2 — Linux server protector that auto-bans brute-forcers and freezes runaway processes (single Rust binary, MIT/Apache, no SaaS)
 ```
 
 ## Body
@@ -37,7 +37,7 @@ Some honesty:
 - Linux only. Uses journald (so SSH brute-force detection can't
   be spoofed via local `logger` — that was bug #19 in the
   hardening pass) and iptables.
-- v0.1.1, just shipped after 4 review rounds caught 28 bugs.
+- v0.1.2, just shipped after 4 review rounds caught 28 bugs.
   CHANGELOG.md has the autopsy if you like that genre.
 - Live on a Contabo VPS for 8+ days, currently standalone (started
   with fail2ban as a second layer, dropped it once PanicMode proved
@@ -54,7 +54,7 @@ Some honesty:
 
 Repo: https://github.com/BorisYamp/panicmode
 Pre-built x86_64 Linux binary in releases (no Rust toolchain
-needed): https://github.com/BorisYamp/panicmode/releases/tag/v0.1.1
+needed): https://github.com/BorisYamp/panicmode/releases/tag/v0.1.2
 
 Happy to answer questions / take feedback. Especially curious
 how this lands against your existing fail2ban + monit / fail2ban

@@ -1,4 +1,4 @@
-# Show HN draft — PanicMode v0.1.1
+# Show HN draft — PanicMode v0.1.2
 
 **Status:** ready, not yet posted.
 
@@ -90,7 +90,7 @@ three priorities in this order:
 Some specifics worth flagging up front:
 
 - Single ~9 MB Rust binary, one YAML config, no daemon-of-daemons stack
-- v0.1.1, hardened across 4 review rounds before tag — 28 bugs found
+- v0.1.2, hardened across 4 review rounds before tag — 28 bugs found
   and fixed (CHANGELOG.md has the autopsy)
 - Live on a Contabo VPS for 8+ days. Started with PanicMode +
   fail2ban as defense-in-depth, then dropped fail2ban after PanicMode
@@ -120,7 +120,7 @@ Repo: https://github.com/BorisYamp/panicmode
 ## Posting checklist
 
 - [x] GIF recorded and committed to `docs/demo.gif`
-- [x] Pre-built binaries uploaded to `v0.1.1` release on GitHub (x86_64)
+- [x] Pre-built binaries uploaded to `v0.1.2` release on GitHub (x86_64)
 - [x] README updated with corrected stats (98, not 946)
 - [x] threat-stats.md with Team Cymru methodology
 - [ ] Final visual check on github.com (24h before launch)

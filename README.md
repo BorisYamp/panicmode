@@ -16,8 +16,8 @@
   → FROZEN: stress-ng-cpu (pid 13006, cpu 101.7%)
   → Telegram alert delivered
 
-[CRITICAL] SSH Brute Force: 91 fails from 161.132.4.167(6), 198.51.100.1(35)
-  → block_ip → iptables -I INPUT 1 -s 161.132.4.167 -j DROP
+[CRITICAL] SSH Brute Force: 91 fails from 203.0.113.5(6), 198.51.100.1(35)
+  → block_ip → iptables -I INPUT 1 -s 203.0.113.5 -j DROP
   → block_ip → iptables -I INPUT 1 -s 198.51.100.1 -j DROP
 ```
 
